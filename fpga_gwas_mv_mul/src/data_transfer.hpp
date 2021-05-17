@@ -10,8 +10,11 @@ void readMeanToStream(
     const ap_int<DATA_WIDTH> *in_ptr,
     hls::stream<mean_wide_type_t> &out_stream)
 {
-    double rows = num_rows;
-    const unsigned int num_blocks = hls::ceil(rows / INPUT_MEAN_PAR_ENTRIES);
+    unsigned int num_blocks = num_rows >> 5;
+	if ( (num_rows % INPUT_MEAN_PAR_ENTRIES) > 0 )
+	{
+		num_blocks++;
+	}
 
 read_mean:
     for (unsigned int i = 0; i < num_blocks; ++i)
@@ -35,7 +38,9 @@ read_mat:
     {
 #pragma HLS PIPELINE
         ap_int<DATA_WIDTH> in_wt = in_ptr[i];
+
         matrix_wide_type_t mat_wt;
+#pragma HLS ARRAY_PARTITION variable = mat_wt complete dim = 1
 
         for (unsigned int j = 0; j < INPUT_MAT_PAR_ENTRIES; ++j)
         {
@@ -65,8 +70,11 @@ void writeStreamToVec(
     hls::stream<output_wide_type_t> &in_stream,
     ap_int<DATA_WIDTH> *out_ptr)
 {
-    double rows = num_rows;
-    const unsigned int num_blocks = hls::ceil(rows / OUTPUT_PAR_ENTRIES);
+    unsigned int num_blocks = num_rows >> 4;
+	if ( (num_rows % OUTPUT_PAR_ENTRIES) > 0 )
+	{
+		num_blocks++;
+	}
 
 write_vec:
     for (unsigned int i = 0; i < num_blocks; ++i)

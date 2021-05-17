@@ -142,22 +142,9 @@ public:
         std::vector<cl::Event> *prevEvent = nullptr)
     {
         // Copy data to the FPGA
-        if (prevEvent != nullptr)
-        {
-
-            OCL_CHECK(err, err = api.queue.enqueueMigrateMemObjects({task_buffers.mat_buf, task_buffers.pheno_buf, task_buffers.mean_buf},
-                                                                    0 /* 0 means from host*/,
-                                                                    prevEvent, &write_data_event[0]));
-            // OCL_CHECK(err, err = api.queue.enqueueMigrateMemObjects({task_buffers.mat_buf, task_buffers.pheno_buf, task_buffers.mean_buf},
-            //                                                         0 /* 0 means from host*/,
-            //                                                         nullptr, &write_data_event[0]));
-        }
-        else
-        {
-            OCL_CHECK(err, err = api.queue.enqueueMigrateMemObjects({task_buffers.mat_buf, task_buffers.pheno_buf, task_buffers.mean_buf},
-                                                                    0 /* 0 means from host*/,
-                                                                    nullptr, &write_data_event[0]));
-        }
+        OCL_CHECK(err, err = api.queue.enqueueMigrateMemObjects({task_buffers.mat_buf, task_buffers.pheno_buf, task_buffers.mean_buf},
+                                                                0 /* 0 means from host*/,
+                                                                prevEvent, &write_data_event[0]));
 
         // Enqueue kernel execution
         OCL_CHECK(err, err = api.queue.enqueueTask(kernel, &write_data_event, &enqueue_event[0]));

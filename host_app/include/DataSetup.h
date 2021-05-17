@@ -86,7 +86,7 @@ inline int convert_bed_val(int bed_val)
     }
 }
 
-void convert_bed_byte_to_fpga_byte(
+inline void convert_bed_byte_to_fpga_byte(
     char bed_byte,
     std::bitset<8>& fpga_byte,
     int& byte_sum,
@@ -118,13 +118,17 @@ struct square
 {
     square(double mean) : mean(mean) {}
 
-    double operator()(const double &Left, const char &Right) const
+    inline double operator()(const double &Left, const char &Right) const
     {
-        if (Right < 3)
+        if (Right != 3)
         {
             double temp = Right - mean;
             return ( Left + temp * temp );
-        } 
+        }
+        else
+        {
+            return Left;
+        }
     }
 
     private:
@@ -145,6 +149,7 @@ vector_stats_t generate_fpga_data(
 
     vector_stats.Y.count = num_cols;
     vector_stats.Y.sq_sum = 0;
+
     for (size_t i = 0; i < num_cols; i++)
     {
         input_pheno[i] = phenotype_buffer[i];
@@ -172,7 +177,7 @@ vector_stats_t generate_fpga_data(
         unsigned int row_sum = 0;
         unsigned int row_count = 0;
 
-#pragma omp parallel for reduction(+: row_sum, row_count)
+// #pragma omp parallel for reduction(+: row_sum, row_count)
         for (size_t byte_idx = 0; byte_idx < bytes_per_row; byte_idx++)
         {
             unsigned char bed_file_byte = bed_row[byte_idx];

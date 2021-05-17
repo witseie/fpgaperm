@@ -73,7 +73,7 @@ void perm_adp_regen_input_data(
     size_t rows_per_block,
     size_t block_size_bytes,
     size_t output_rows_per_block,
-    size_t output_mat_buffer_size_bytes,
+    size_t output_block_size_bytes,
     const input_mean_vector_t &input_mean,
     const input_matrix_vector_t &input_matrix,
     input_mean_vector_t &input_mean_regen,
@@ -93,12 +93,11 @@ void perm_adp_regen_input_data(
         }
 
         size_t input_block = (i / rows_per_block);
-        size_t output_block = ( output_idx / output_rows_per_block );
-
         size_t input_mat_start = input_block * block_size_bytes;
         size_t input_mat_idx = input_mat_start + ((i % rows_per_block) * bytes_per_row);
 
-        size_t output_mat_start = output_block * output_mat_buffer_size_bytes;
+        size_t output_block = ( output_idx / output_rows_per_block );
+        size_t output_mat_start = output_block * output_block_size_bytes;
         size_t output_mat_idx = output_mat_start + ((output_idx % output_rows_per_block) * bytes_per_row);
 
         std::copy(input_matrix.data() + input_mat_idx,
@@ -261,10 +260,13 @@ void perm_maxT_update_results(
         }
 
         // std::cout << i << std::setw (8)
-        //     << vector_stats.X[i].count << std::setw (15)
+		// 	<< vector_stats.X[i].count << std::setw (15)
+		// 	<< vector_stats.X[i].sq_sum << std::setw (15)
+		// 	<< vector_stats.X[i].std_dev << std::setw (15)
+        // 	<< vector_stats.Y.std_dev << std::setw (15)
         //     << "Dot prod = " << dot_prod << std::setw (15)
         //     << "Denom = " << denom << std::setw (15)
-        //     // << "Beta = " << beta << std::setw (15)
+        //     << "Beta = " << beta << std::setw (15)
         //     << "F = " << gwas_result[i] << std::endl;
     }
 

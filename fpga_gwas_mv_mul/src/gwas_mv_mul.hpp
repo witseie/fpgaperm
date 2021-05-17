@@ -40,16 +40,12 @@ mv_mul:
             for (unsigned int j = 0; j < INPUT_MAT_PAR_ENTRIES; ++j)
             {
 #pragma HLS UNROLL
-                unsigned int vec_wt_index = ((i * INPUT_MAT_PAR_ENTRIES) + j) / INPUT_VEC_PAR_ENTRIES;
+                unsigned int vec_wt_index = (i * INPUT_MAT_PAR_ENTRIES + j) / INPUT_VEC_PAR_ENTRIES;
 
                 vector_wide_type_t vec_wt = vector_buffer[vec_wt_index];
 #pragma HLS ARRAY_PARTITION variable = vec_wt complete dim = 1
 
                 input_matrix_data_type_t temp_mat = mat_wt[j];
-                input_mean_data_type_t temp_mean = mean_wt[row % INPUT_MEAN_PAR_ENTRIES];
-
-                int_vec_data_type_t temp_vec = vec_wt[j % INPUT_VEC_PAR_ENTRIES];
-                int_snp_data_type_t temp_mat_sub = temp_mat - temp_mean;
 
                 mul_data_type_t temp_product;
                 if (temp_mat == 3)
@@ -58,6 +54,10 @@ mv_mul:
                 }
                 else
                 {
+                    input_mean_data_type_t temp_mean = mean_wt[row % INPUT_MEAN_PAR_ENTRIES];
+                    int_vec_data_type_t temp_vec = vec_wt[j % INPUT_VEC_PAR_ENTRIES];
+                    int_snp_data_type_t temp_mat_sub = temp_mat - temp_mean;
+
                     temp_product = temp_mat_sub * temp_vec;
                 }
 

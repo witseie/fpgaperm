@@ -56,8 +56,9 @@ struct AlignedAllocator
 
 enum perm_algo_t
 {
-    perm_adaptive = 0,
-    perm_maxT     = 1
+    perm_adaptive        = 0,
+    perm_maxT            = 1,
+    perm_regression_only = 2
 };
 
 struct perm_adp_results_t

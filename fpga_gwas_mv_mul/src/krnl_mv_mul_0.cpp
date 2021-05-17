@@ -26,18 +26,19 @@ extern "C"
 #pragma HLS INTERFACE s_axilite port = return bundle = control
 
 #pragma HLS DATAFLOW
-
+#pragma HLS INLINE
         hls::stream<mean_wide_type_t> meanStream;
-#pragma HLS data_pack variable = meanStream
+#pragma HLS stream depth=2 variable=meanStream
 
         hls::stream<matrix_wide_type_t> matStream;
-#pragma HLS data_pack variable = matStream
+#pragma HLS stream depth=2 variable=matStream
 
         ap_int<DATA_WIDTH> vecBuffer[NUM_COLS / INPUT_VEC_PAR_ENTRIES];
 #pragma HLS ARRAY_PARTITION variable = vecBuffer cyclic factor = 8 dim = 1
+#pragma HLS STREAM off variable=vecBuffer depth=2
 
         hls::stream<output_wide_type_t> outVecStream;
-#pragma HLS data_pack variable = outVecStream
+#pragma HLS stream depth=2 variable=outVecStream
 
 #pragma HLS DATAFLOW
         readVecToBuffer(num_cols, vec, vecBuffer);
