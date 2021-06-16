@@ -98,6 +98,11 @@ int main(int argc, char **argv)
         perm_algo = perm_regression_only;
     }
 
+    auto time = std::chrono::system_clock::now();
+    auto time_out = std::chrono::system_clock::to_time_t(time);
+
+    std::cout << std::endl << "Start time: " << std::ctime(&time_out) << std::endl;
+
     std::vector<double> phenotype_data;
     std::vector<char> genotype_data;
     size_t num_indiv_from_file = 0;
@@ -168,30 +173,32 @@ int main(int argc, char **argv)
 
     size_t matrix_block_size_bytes = ( block_size_arg > 0 ) ? block_size_arg : (4194304 * 2);
 
-    size_t bytes_per_row = round_to_multiple((size_t)ceil(num_indiv / 4.0), INPUT_MAT_PAR_ENTRIES);
-    size_t rows_per_block = matrix_block_size_bytes / bytes_per_row;
-    size_t num_blocks = ceil( (double)num_snps / rows_per_block );
-    size_t last_block_rows = num_snps - ( ( num_blocks - 1 ) * rows_per_block );
+    size_t bytes_per_snp = round_to_multiple((size_t)ceil(num_indiv / 4.0), (INPUT_MAT_PAR_ENTRIES/4));
+    size_t snps_per_block = matrix_block_size_bytes / bytes_per_snp;
+    size_t num_blocks = ceil( (double)num_snps / snps_per_block );
+    size_t last_block_snps = num_snps - ( ( num_blocks - 1 ) * snps_per_block );
 
+    std::cout << "Bytes per SNP = " << bytes_per_snp << " bytes" << std::endl;
     std::cout << "Matrix block size = " << matrix_block_size_bytes << " bytes" << std::endl;
     std::cout << "Num matrix blocks = " << num_blocks << std::endl;
-    std::cout << "Rows per block = " << rows_per_block << std::endl;
-    std::cout << "Last block rows = " << last_block_rows << std::endl;
+    std::cout << "SNPs per block = " << snps_per_block << std::endl;
+    std::cout << "Last block SNPs = " << last_block_snps << std::endl;
 
     // For adaptive buffer resizing
-    // size_t current_rows_per_block = rows_per_block;
+    // size_t current_rows_per_block = snps_per_block;
     // size_t current_block_size_bytes = matrix_block_size_bytes;
 
     size_t input_matrix_size_bytes = num_blocks * matrix_block_size_bytes;
 
-    size_t pheno_num_elems = round_to_multiple(num_indiv, INPUT_VEC_PAR_ENTRIES);
+    // size_t pheno_num_elems = round_to_multiple(num_indiv, INPUT_VEC_PAR_ENTRIES);
+    size_t pheno_num_elems = bytes_per_snp * 4;
     size_t pheno_size_bytes = INPUT_VEC_DATATYPE_SIZE_BYTES * pheno_num_elems;
 
-    size_t in_mean_bytes_per_block = round_to_multiple( ( INPUT_MEAN_DATATYPE_SIZE_BYTES * rows_per_block ), 4096 );
+    size_t in_mean_bytes_per_block = round_to_multiple( ( INPUT_MEAN_DATATYPE_SIZE_BYTES * snps_per_block ), 4096 );
     size_t in_mean_elems_per_block = in_mean_bytes_per_block / INPUT_MEAN_DATATYPE_SIZE_BYTES;
     size_t in_mean_elems = num_blocks * in_mean_elems_per_block;
 
-    size_t out_vec_bytes_per_block = round_to_multiple( ( OUTPUT_DATATYPE_SIZE_BYTES * rows_per_block ), 4096 );
+    size_t out_vec_bytes_per_block = round_to_multiple( ( OUTPUT_DATATYPE_SIZE_BYTES * snps_per_block ), 4096 );
     size_t out_vec_elems_per_block = out_vec_bytes_per_block / OUTPUT_DATATYPE_SIZE_BYTES;
     size_t out_vec_elems = num_blocks * out_vec_elems_per_block;
 
@@ -254,7 +261,7 @@ int main(int argc, char **argv)
 
     cl_int err;
 
-    // std::srand(420);   //REMOVE THIS SOON (seed for random_shuffle)
+    std::srand(std::time(NULL));
     
     // Open CL setup
     OclApi api(binaryFile);
@@ -312,7 +319,7 @@ int main(int argc, char **argv)
                                      output_vector_fpga.data() + (i)*out_vec_elems_per_block,
                                      &err));
 
-            unsigned int n_rows = (i == num_blocks - 1) ? last_block_rows : rows_per_block;
+            unsigned int n_rows = (i == num_blocks - 1) ? last_block_snps : snps_per_block;
 
             //Setting kernel arguments
             int narg = 0;
@@ -345,7 +352,7 @@ int main(int argc, char **argv)
             {
                 perm_adp_update_results(perm,
                                         num_snps,
-                                        rows_per_block,
+                                        snps_per_block,
                                         out_vec_elems_per_block,
                                         std::cref(output_vector_fpga),
                                         std::cref(vector_stats),
@@ -356,7 +363,7 @@ int main(int argc, char **argv)
             {
                 perm_maxT_update_results(perm,
                                          num_snps,
-                                         rows_per_block,
+                                         snps_per_block,
                                          out_vec_elems_per_block,
                                          std::cref(output_vector_fpga),
                                          std::cref(vector_stats),
@@ -371,7 +378,7 @@ int main(int argc, char **argv)
                 std::thread result_thread(perm_adp_update_results,
                             perm,
                             num_snps,
-                            rows_per_block,
+                            snps_per_block,
                             out_vec_elems_per_block,
                             output_vector_fpga,
                             std::cref(vector_stats),
@@ -395,17 +402,17 @@ int main(int argc, char **argv)
                                                                  perm_adp_results);
 
                     size_t new_num_snps = num_snps - num_dropped_snps;
-                    size_t new_num_blocks = ceil((double)new_num_snps / rows_per_block);
+                    size_t new_num_blocks = ceil((double)new_num_snps / snps_per_block);
 
                     size_t new_input_matrix_size = new_num_blocks * matrix_block_size_bytes;
-                    size_t new_last_block_rows = new_num_snps - ((new_num_blocks - 1) * rows_per_block);
+                    size_t new_last_block_rows = new_num_snps - ((new_num_blocks - 1) * snps_per_block);
 
                     input_matrix_regen.resize(new_input_matrix_size);
 
-                    perm_adp_regen_input_data(bytes_per_row,
-                                              rows_per_block,
+                    perm_adp_regen_input_data(bytes_per_snp,
+                                              snps_per_block,
                                               matrix_block_size_bytes,
-                                              rows_per_block,
+                                              snps_per_block,
                                               matrix_block_size_bytes,
                                               input_mean,
                                               input_matrix,
@@ -417,21 +424,21 @@ int main(int argc, char **argv)
                     input_mean_ptr = &input_mean_regen;
 
                     num_blocks = new_num_blocks;
-                    last_block_rows = new_last_block_rows;
+                    last_block_snps = new_last_block_rows;
 
                     std::cout << "Perm = " << perm
                             << " Dropped SNPs = " << num_dropped_snps
                             << " Remaining SNPs = " << (num_snps - num_dropped_snps)
                             << " Num blocks = " << new_num_blocks << std::endl;
 
-                    if (new_num_blocks == 4)
+                    if (new_num_blocks <= 4)
                     {
                         perm_adp_one_perm_per_cu_start = perm;
                         perm_adp_drop_counter = 0;
 
-                        last_block_rows = (num_snps - num_dropped_snps);
+                        last_block_snps = (num_snps - num_dropped_snps);
 
-                        std::cout << "Starting 1 perm per CU with " << last_block_rows << " SNPs" << std::endl;
+                        std::cout << "Starting 1 perm per CU with " << last_block_snps << " SNPs" << std::endl;
                         break;
                     }
 
@@ -457,7 +464,7 @@ int main(int argc, char **argv)
                 std::thread result_thread(perm_maxT_update_results,  
                                           perm,
                                           num_snps,
-                                          rows_per_block,
+                                          snps_per_block,
                                           out_vec_elems_per_block, 
                                           output_vector_fpga,
                                           std::cref(vector_stats),
@@ -481,12 +488,12 @@ int main(int argc, char **argv)
         }
     }
 
-    // std::vector<size_t> perm_adp_snp_indexes(last_block_rows, 0);
+    // std::vector<size_t> perm_adp_snp_indexes(last_block_snps, 0);
 
     if ( ( perm_algo == perm_adaptive ) &&
          ( perm_adp_one_perm_per_cu_start > 0 ) )
     {
-        std::vector<size_t> perm_adp_snp_indexes(last_block_rows, 0);
+        std::vector<size_t> perm_adp_snp_indexes(last_block_snps, 0);
 
         int count = 0;
         for (size_t i = 0; i < num_snps; i++)
@@ -503,15 +510,24 @@ int main(int argc, char **argv)
 
         ocl_tasks.resize(num_blocks);
 
-        size_t perm_adp_rows_per_block = rows_per_block * 4;
-        size_t perm_adp_block_size_bytes = matrix_block_size_bytes * 4;
+        // size_t perm_adp_rows_per_block = snps_per_block * 4;
+        // size_t perm_adp_block_size_bytes = matrix_block_size_bytes * 4;
 
-        in_mean_elems_per_block *= 4;
-        in_mean_bytes_per_block *= 4;
-        out_vec_elems_per_block *= 4;
-        out_vec_bytes_per_block *= 4;
+        // in_mean_elems_per_block *= 4;
+        // in_mean_bytes_per_block *= 4;
+        // out_vec_elems_per_block *= 4;
+        // out_vec_bytes_per_block *= 4;
 
-        std::cout << "Remaining SNPs = " << last_block_rows << std::endl;
+        size_t perm_adp_rows_per_block = last_block_snps;
+        size_t perm_adp_block_size_bytes = last_block_snps * bytes_per_snp;
+
+        in_mean_elems_per_block = round_to_multiple(last_block_snps, INPUT_MEAN_PAR_ENTRIES);
+        in_mean_bytes_per_block = in_mean_elems_per_block * INPUT_MEAN_DATATYPE_SIZE_BYTES;
+
+        out_vec_elems_per_block = round_to_multiple(last_block_snps , OUTPUT_PAR_ENTRIES);
+        out_vec_bytes_per_block = out_vec_elems_per_block * OUTPUT_DATATYPE_SIZE_BYTES;
+
+        std::cout << "Remaining SNPs = " << last_block_snps << std::endl;
         std::cout << "New matrix block size = " << perm_adp_block_size_bytes << " bytes" << std::endl;
         std::cout << "New rows per block = " << perm_adp_rows_per_block << std::endl;
         std::cout << "New mean elems per block = " << in_mean_elems_per_block << std::endl;
@@ -520,8 +536,8 @@ int main(int argc, char **argv)
         input_matrix_vector_t input_matrix_test(perm_adp_block_size_bytes, 0);
         input_mean_vector_t input_mean_test(in_mean_elems_per_block, 0);
 
-        perm_adp_regen_input_data(bytes_per_row,
-                                  rows_per_block,
+        perm_adp_regen_input_data(bytes_per_snp,
+                                  snps_per_block,
                                   matrix_block_size_bytes,
                                   perm_adp_rows_per_block,
                                   perm_adp_block_size_bytes,
@@ -531,7 +547,7 @@ int main(int argc, char **argv)
                                   input_matrix_test,
                                   perm_adp_results);
 
-        std::cout << "Starting long term permutation with " << last_block_rows << " SNPs" << std::endl;
+        std::cout << "Starting long term permutation with " << last_block_snps << " SNPs" << std::endl;
         std::cout << "Starting from the " << perm_adp_one_perm_per_cu_start + 1 << "th permutation" << std::endl;
         std::cout << "Matrix Size: \t\t" << perm_adp_block_size_bytes << " bytes" << std::endl;
         std::cout << "Input Mean Size: \t" << in_mean_elems_per_block * INPUT_MEAN_DATATYPE_SIZE_BYTES << " bytes" << std::endl;
@@ -608,7 +624,7 @@ int main(int argc, char **argv)
 
                 int narg = 0;
                 //Setting kernel arguments
-                OCL_CHECK(err, err = kernels[kernel_num].setArg(narg++, (const unsigned int)last_block_rows));
+                OCL_CHECK(err, err = kernels[kernel_num].setArg(narg++, (const unsigned int)last_block_snps));
                 OCL_CHECK(err, err = kernels[kernel_num].setArg(narg++, (const unsigned int)pheno_num_elems));
                 OCL_CHECK(err, err = kernels[kernel_num].setArg(narg++, kernel_bufs[i].mean_buf));
                 OCL_CHECK(err, err = kernels[kernel_num].setArg(narg++, kernel_bufs[i].mat_buf));
@@ -634,7 +650,7 @@ int main(int argc, char **argv)
                                       std::ref(perm_adp_results),
                                       std::cref(perm_adp_snp_indexes) );
 
-            if ( ( (perm % perm_adp_drop_interval) < num_blocks ) && ( last_block_rows >= 10 ) )
+            if ( ( (perm % perm_adp_drop_interval) < num_blocks ) )
             {
                 result_thread.join();
             }
@@ -643,25 +659,27 @@ int main(int argc, char **argv)
                 result_thread.detach();
             }
 
-            if ( ( (perm % perm_adp_drop_interval) < num_blocks ) && ( last_block_rows >= 10 ) )
+            if ( ( (perm % perm_adp_drop_interval) < num_blocks ) )
             {
+                auto prev_snps = last_block_snps;
+
                 size_t num_dropped_snps = perm_adp_drop_snps(perm,
                                                              num_snps,
                                                              perm_adp_drop_count,
                                                              perm_adp_results);
 
-                last_block_rows = num_snps - num_dropped_snps;
+                last_block_snps = num_snps - num_dropped_snps;
 
-                size_t min_buf_size = 1048576/64;
-                size_t new_rows_per_block = ( perm_adp_block_size_bytes / ( bytes_per_row * 2 ) );
-                if (last_block_rows < new_rows_per_block && perm_adp_block_size_bytes > min_buf_size )
+                size_t min_buf_size = bytes_per_snp * 10;
+                if (last_block_snps < prev_snps && perm_adp_block_size_bytes > min_buf_size )
                 {
-                    perm_adp_block_size_bytes /= 2;
+                    perm_adp_block_size_bytes = last_block_snps * bytes_per_snp;
 
-                    in_mean_elems_per_block /= 2;
-                    in_mean_bytes_per_block /= 2;
-                    out_vec_elems_per_block /= 2;
-                    out_vec_bytes_per_block /= 2;
+                    in_mean_elems_per_block = round_to_multiple(last_block_snps, INPUT_MEAN_PAR_ENTRIES);
+                    in_mean_bytes_per_block = in_mean_elems_per_block * INPUT_MEAN_DATATYPE_SIZE_BYTES;
+
+                    out_vec_elems_per_block = round_to_multiple(last_block_snps , OUTPUT_PAR_ENTRIES);
+                    out_vec_bytes_per_block = out_vec_elems_per_block * OUTPUT_DATATYPE_SIZE_BYTES;
 
 #pragma omp parallel for
                     for (size_t i = 0; i < input_matrix_replicated.size(); i++)
@@ -695,12 +713,12 @@ int main(int argc, char **argv)
                                                  &err));
                     }
 
-                    std::cout << "Num rows = " << last_block_rows << " New buffer size = " << perm_adp_block_size_bytes
-                        << " New rows per buffer = " << ( perm_adp_block_size_bytes / bytes_per_row ) << std::endl;
+                    std::cout << "New buffer size = " << perm_adp_block_size_bytes
+                        << " New SNPs per buffer = " << ( perm_adp_block_size_bytes / bytes_per_snp ) << std::endl;
                 }
 
-                perm_adp_regen_and_replicate_input_data(bytes_per_row,
-                                                        rows_per_block,
+                perm_adp_regen_and_replicate_input_data(bytes_per_snp,
+                                                        snps_per_block,
                                                         matrix_block_size_bytes,
                                                         in_mean_elems_per_block,
                                                         perm_adp_block_size_bytes,
@@ -710,16 +728,72 @@ int main(int argc, char **argv)
                                                         perm_adp_snp_indexes,
                                                         input_mean_replicated,
                                                         input_matrix_replicated);
-                std::cout << "Perm = " << perm
+
+                std::cout << " Perm = " << perm
                           << " Dropped SNPs = " << num_dropped_snps
                           << " Remaining SNPs = " << (num_snps - num_dropped_snps) << std::endl;
  
                 if (perm_adp_drop_counter == 10)
                 {
                     perm_adp_drop_interval *= 2;
+
+                    if (perm_adp_drop_interval >= 5000000)
+                    {
+                        perm_adp_drop_interval = 5000000;
+                    }
+
+                    std::cout << "Drop interval = " << perm_adp_drop_interval << std::endl;
                     perm_adp_drop_counter = 0;
 
-                    std::cout << "New drop interval = " << perm_adp_drop_interval << std::endl;
+                    // Write intermediate results to file
+                    if (perm > 50000000)
+                    {
+                        std::ostringstream iss;
+                        iss << "perm_adaptive." << perm << ".txt";
+                        std::string filename = iss.str();
+
+                        std::ofstream res_file(filename);
+                        std::ifstream bim_file_stream(bim_file);
+
+                        time = std::chrono::system_clock::now();
+                        time_out = std::chrono::system_clock::to_time_t(time);
+
+                        res_file << "Write time: " << std::ctime(&time_out) << std::endl;
+                        size_t idx = 0;
+                        for (size_t i = 0; i < num_snps; i++)
+                        {
+                            std::string line;
+                            std::getline(bim_file_stream, line);
+
+                            if (i != perm_adp_snp_indexes[idx])
+                                continue;
+
+                            size_t num_perms;
+                            double p_val;
+                            if (perm_adp_results.perm_dropped[i] == 0)
+                            {
+                                num_perms = perm;
+                            }
+                            else
+                            {
+                                num_perms = perm_adp_results.perm_dropped[i];
+                            }
+
+                            p_val = (double)(perm_adp_results.perm_count[i] + 1) / (num_perms + 1);
+
+                            std::string buf;
+                            std::string snp_name;
+                            std::stringstream stream(line);
+                            stream >> buf;
+                            stream >> snp_name;
+                            res_file << std::left << std::setw(30) << snp_name.c_str()
+                                     << std::left << std::setw(25) << gwas_result[i]
+                                     << std::left << std::setw(25) << p_val
+                                     << std::left << std::setw(25) << num_perms << std::endl;
+
+                            idx++;
+                        }
+                    }
                 }
 
                 perm_adp_drop_counter++;
@@ -743,6 +817,7 @@ int main(int argc, char **argv)
     if ( perm_algo == perm_adaptive )
     {
         std::vector<double> perm_result(num_snps);
+        std::vector<size_t> num_perms_vec(num_snps);
 
         std::ofstream res_file("perm_adaptive.res.txt");
 
@@ -752,9 +827,15 @@ int main(int argc, char **argv)
             double p_val;
 
             if (perm_adp_results.perm_dropped[i] == 0)
+            {
                 p_val = (double)(perm_adp_results.perm_count[i] + 1) / (num_perms + 1);
+                num_perms_vec[i] = num_perms;
+            }
             else
+            {
                 p_val = (double)(perm_adp_results.perm_count[i] + 1) / (perm_adp_results.perm_dropped[i] + 1);
+                num_perms_vec[i] = perm_adp_results.perm_dropped[i];
+            }
 
             perm_result[i] = p_val;
         }
@@ -776,7 +857,7 @@ int main(int argc, char **argv)
             res_file << std::left << std::setw(30) << snp_name.c_str()
                 << std::left << std::setw(25) << gwas_result[i]
                 << std::left << std::setw(25) << perm_result[i]
-                << std::left << std::setw(25) << perm_adp_results.perm_count[i] << std::endl;
+                << std::left << std::setw(25) << num_perms_vec[i] << std::endl;
             
             // idx_count++;
         }
@@ -873,8 +954,8 @@ int main(int argc, char **argv)
             stream >> buf;
             stream >> snp_name;
 
-            unsigned int idx_start = ( i / rows_per_block ) * out_vec_elems_per_block;
-            unsigned int output_idx = idx_start + (i % rows_per_block);
+            unsigned int idx_start = ( i / snps_per_block ) * out_vec_elems_per_block;
+            unsigned int output_idx = idx_start + (i % snps_per_block);
 
             double dot_prod = output_vector_fpga[output_idx].to_double();
             double beta = ( dot_prod / vector_stats.X[i].sq_sum );
@@ -904,6 +985,11 @@ int main(int argc, char **argv)
     std::cout << "FPGA time: " << processing_time.count() << " s" << std::endl;
     std::cout << "Results export time: " << results_export_time.count() << " s" << std::endl;
     std::cout << "Total time: " << ( processing_time.count() + import_time.count() + results_export_time.count() ) << " s" << std::endl;
+
+    time = std::chrono::system_clock::now();
+    time_out = std::chrono::system_clock::to_time_t(time);
+
+    std::cout << "End time: " << std::ctime(&time_out) << std::endl;
 
     return 0;
 }

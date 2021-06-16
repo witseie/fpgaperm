@@ -93,10 +93,10 @@ inline void convert_bed_byte_to_fpga_byte(
     int& byte_count,
     std::vector<char> &converted_snp_data,
     size_t compressed_col_idx,
-    size_t num_compressed_cols
+    size_t num_snp_vals = 4
     )
 {
-    int num_snp_vals = (compressed_col_idx == num_compressed_cols - 1) ? (converted_snp_data.size() % 4) : 4;
+    // int num_snp_vals = (compressed_col_idx == num_compressed_cols - 1) ? (converted_snp_data.size() % 4) : 4;
 
     for (size_t i = 0; i < num_snp_vals; i++)
     {
@@ -152,47 +152,57 @@ vector_stats_t generate_fpga_data(
 
     for (size_t i = 0; i < num_cols; i++)
     {
-        input_pheno[i] = phenotype_buffer[i];
+        double phenotype = phenotype_buffer[i];
+        input_pheno[i] = phenotype;
 
-        vector_stats.Y.sq_sum += phenotype_buffer[i] * phenotype_buffer[i];
+        vector_stats.Y.sq_sum += phenotype * phenotype;
     }
 
     vector_stats.Y.std_dev = std::sqrt(vector_stats.Y.sq_sum);
 
-    unsigned int bytes_per_row = ceil(num_cols / 4.0);
-    unsigned int cols_per_block = round_to_multiple(bytes_per_row, INPUT_MAT_PAR_ENTRIES);
+    unsigned int input_bytes_per_snp = ceil(num_cols / 4.0);
+    unsigned int output_bytes_per_snp = round_to_multiple(input_bytes_per_snp, (INPUT_MAT_PAR_ENTRIES / 4));
 
-    unsigned int rows_per_block = block_size_bytes / cols_per_block;
-    unsigned int row_incr = round_to_multiple(rows_per_block, ( 4096 / INPUT_MEAN_DATATYPE_SIZE_BYTES ) );
+    unsigned int snps_per_block = block_size_bytes / output_bytes_per_snp;
+    unsigned int row_incr = round_to_multiple(snps_per_block, ( 4096 / INPUT_MEAN_DATATYPE_SIZE_BYTES ) );
+
+    unsigned int last_byte_snps = (num_cols % 4 == 0) ? 4 : (num_cols % 4);
 
 #pragma omp parallel for
     for (size_t row = 0; row < num_rows; row++)
     {
-        auto start_row = bed_file_buffer.begin() + ( row * bytes_per_row );
-        auto end_row = bed_file_buffer.begin() + ( ( row + 1 )  * bytes_per_row );
+        auto snp_start = bed_file_buffer.begin() + ( row * input_bytes_per_snp );
+        auto snp_end = bed_file_buffer.begin() + ( ( row + 1 )  * input_bytes_per_snp );
 
-        std::vector<char> bed_row(start_row, end_row);
-        std::vector<char> converted_row(num_cols);
+        std::vector<char> bed_file_snp(snp_start, snp_end);
+        std::vector<char> converted_snp(num_cols);
 
         unsigned int row_sum = 0;
         unsigned int row_count = 0;
 
 // #pragma omp parallel for reduction(+: row_sum, row_count)
-        for (size_t byte_idx = 0; byte_idx < bytes_per_row; byte_idx++)
+        for (size_t byte_idx = 0; byte_idx < input_bytes_per_snp; byte_idx++)
         {
-            unsigned char bed_file_byte = bed_row[byte_idx];
+            unsigned char bed_file_byte = bed_file_snp[byte_idx];
             std::bitset<8> converted_byte;
 
             int byte_sum = 0;
             int byte_count = 0;
 
-            convert_bed_byte_to_fpga_byte(bed_file_byte, converted_byte, byte_sum, byte_count, converted_row, byte_idx, bytes_per_row);
+            if (byte_idx == input_bytes_per_snp - 1)
+            {
+                convert_bed_byte_to_fpga_byte(bed_file_byte, converted_byte, byte_sum, byte_count, converted_snp, byte_idx, last_byte_snps);
+            }
+            else
+            {
+                convert_bed_byte_to_fpga_byte(bed_file_byte, converted_byte, byte_sum, byte_count, converted_snp, byte_idx);
+            }
 
             row_sum += byte_sum;
             row_count += byte_count;
 
-            size_t block_start_index = ( row / rows_per_block ) * block_size_bytes;
-            size_t block_offset = ( (row % rows_per_block) * cols_per_block );
+            size_t block_start_index = ( row / snps_per_block ) * block_size_bytes;
+            size_t block_offset = ( (row % snps_per_block) * output_bytes_per_snp );
             size_t matrix_index = block_start_index + block_offset + byte_idx;
             unsigned char fpga_byte = converted_byte.to_ulong() & 0xFF;
             input_matrix[matrix_index] = fpga_byte;
@@ -201,14 +211,14 @@ vector_stats_t generate_fpga_data(
         mean_stddev_t mean_stddev;
         mean_stddev.count = row_count;
         mean_stddev.mean = (double)row_sum / row_count;
-        mean_stddev.sq_sum = std::accumulate( converted_row.begin(), converted_row.end(), 0.0, square(mean_stddev.mean) );
+        mean_stddev.sq_sum = std::accumulate( converted_snp.begin(), converted_snp.end(), 0.0, square(mean_stddev.mean) );
 
         mean_stddev.std_dev = std::sqrt(mean_stddev.sq_sum);
 
         vector_stats.X[row] = mean_stddev;
 
-        unsigned int mean_start = ( row / rows_per_block ) * row_incr;
-        unsigned int mean_index = mean_start + (row % rows_per_block);
+        unsigned int mean_start = ( row / snps_per_block ) * row_incr;
+        unsigned int mean_index = mean_start + (row % snps_per_block);
         if (std::isnan(vector_stats.X[row].mean))
         {
             input_mean[mean_index] = 0;
