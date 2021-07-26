@@ -119,7 +119,7 @@ void perm_adp_regen_input_data(
 int perm_adp_drop_snps(
     size_t perm,
     size_t num_rows,
-    size_t adaptive_perm_drop_count,
+    size_t min_perms_per_snp,
     perm_adp_results_t &perm_adp_results
     )
 {
@@ -133,7 +133,7 @@ int perm_adp_drop_snps(
         }
         else
         {
-            if (perm_adp_results.perm_count[i] >= adaptive_perm_drop_count)
+            if (perm_adp_results.perm_count[i] >= min_perms_per_snp)
             {
                 perm_adp_results.perm_dropped[i] = perm;
                 perm_adp_results.is_snp_dropped[i] = 1;

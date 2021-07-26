@@ -141,9 +141,10 @@ vector_stats_t generate_fpga_data(
     unsigned long int block_size_bytes,
     std::vector<char> bed_file_buffer,
     std::vector<double> phenotype_buffer,
-    input_mean_vector_t &input_mean,
-    input_matrix_vector_t &input_matrix,
-    input_pheno_vector_t &input_pheno)
+    double phenotype_scale_factor,
+    input_mean_vector_t &input_mean_buffer,
+    input_matrix_vector_t &input_matrix_buffer,
+    input_pheno_vector_t &input_pheno_buffer)
 {
     vector_stats_t vector_stats(num_rows);
 
@@ -152,8 +153,8 @@ vector_stats_t generate_fpga_data(
 
     for (size_t i = 0; i < num_cols; i++)
     {
-        double phenotype = phenotype_buffer[i];
-        input_pheno[i] = phenotype;
+        double phenotype = phenotype_buffer[i] * phenotype_scale_factor;
+        input_pheno_buffer[i] = phenotype;
 
         vector_stats.Y.sq_sum += phenotype * phenotype;
     }
@@ -205,7 +206,7 @@ vector_stats_t generate_fpga_data(
             size_t block_offset = ( (row % snps_per_block) * output_bytes_per_snp );
             size_t matrix_index = block_start_index + block_offset + byte_idx;
             unsigned char fpga_byte = converted_byte.to_ulong() & 0xFF;
-            input_matrix[matrix_index] = fpga_byte;
+            input_matrix_buffer[matrix_index] = fpga_byte;
         }
 
         mean_stddev_t mean_stddev;
@@ -221,32 +222,32 @@ vector_stats_t generate_fpga_data(
         unsigned int mean_index = mean_start + (row % snps_per_block);
         if (std::isnan(vector_stats.X[row].mean))
         {
-            input_mean[mean_index] = 0;
+            input_mean_buffer[mean_index] = 0;
         }
         else
         {
-            input_mean[mean_index] = vector_stats.X[row].mean;
+            input_mean_buffer[mean_index] = vector_stats.X[row].mean;
         }
     }
 
     if (0)
     {
         std::cout << std::endl
-                  << "Writing " << 1 << " * " << input_matrix.size() << " bytes to input_matrix.bin" << std::endl;
-        std::ofstream fout_mat("input_matrix_test.bin", std::ios::out | std::ios::binary);
-        fout_mat.write((char *)&input_matrix[0], input_matrix.size());
+                  << "Writing " << 1 << " * " << input_matrix_buffer.size() << " bytes to input_matrix_buffer.bin" << std::endl;
+        std::ofstream fout_mat("input_matrix_buffer.bin", std::ios::out | std::ios::binary);
+        fout_mat.write((char *)&input_matrix_buffer[0], input_matrix_buffer.size());
         fout_mat.close();
 
         std::cout << std::endl
-                  << "Writing " << sizeof(input_pheno_data_type_t) << " * " << input_pheno.size() << " bytes to input_pheno.bin" << std::endl;
-        std::ofstream fout_vec("input_pheno.bin", std::ios::out | std::ios::binary);
-        fout_vec.write((char *)&input_pheno[0], input_pheno.size() * sizeof(input_pheno_data_type_t));
+                  << "Writing " << sizeof(input_pheno_data_type_t) << " * " << input_pheno_buffer.size() << " bytes to input_pheno_buffer.bin" << std::endl;
+        std::ofstream fout_vec("input_pheno_buffer.bin", std::ios::out | std::ios::binary);
+        fout_vec.write((char *)&input_pheno_buffer[0], input_pheno_buffer.size() * sizeof(input_pheno_data_type_t));
         fout_vec.close();
 
         std::cout << std::endl
-                  << "Writing " << sizeof(input_mean_data_type_t) << " * " << input_mean.size() << " bytes to input_mean.bin" << std::endl;
-        std::ofstream fout_mean("input_mean.bin", std::ios::out | std::ios::binary);
-        fout_mean.write((char *)&input_mean[0], input_mean.size() * sizeof(input_mean_data_type_t));
+                  << "Writing " << sizeof(input_mean_data_type_t) << " * " << input_mean_buffer.size() << " bytes to input_mean_buffer.bin" << std::endl;
+        std::ofstream fout_mean("input_mean_buffer.bin", std::ios::out | std::ios::binary);
+        fout_mean.write((char *)&input_mean_buffer[0], input_mean_buffer.size() * sizeof(input_mean_data_type_t));
         fout_mean.close();
     }
 

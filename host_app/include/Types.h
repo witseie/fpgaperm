@@ -98,7 +98,7 @@ struct vector_stats_t
 
     vector_stats_t(int num_rows = 0)
     {
-        X        = std::vector<mean_stddev_t>(num_rows);
+        X = std::vector<mean_stddev_t>(num_rows);
     }
 };
 
