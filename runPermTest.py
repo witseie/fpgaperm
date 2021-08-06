@@ -1,124 +1,150 @@
-import numpy as np
-import matplotlib.pyplot as plt
 import sys, getopt
 import argparse
 import subprocess
+import os.path
+import statsmodels.api as sm
+import numpy as np
+import pandas as pd
 
-def get_pheno_residuals(phenoFile, covarFile = None):
-    with open(phenoFile) as f:
-        lines = f.read().splitlines()
+def has_header(file):
+    with open(file) as f:
+        header = f.readline().split()
+        has_header = pd.Series(pd.to_numeric(header, errors='coerce')).isnull().all()
 
-    lines = [line.split() for line in lines]
+        return has_header
 
-    pheno = np.array(lines)
-    pheno = (pheno[:, -1:]).astype('float32')
-
-    num_rows = np.shape(pheno)[0]
-
-    if covarFile is not None:
-        with open(covarFile) as f:
-            lines = f.read().splitlines()
-
-        lines.pop(0)
-        lines = [line.split() for line in lines]
-
-        covars = np.array(lines)
-        covars = (covars[:, 2:]).astype('float32')
-
-        ones_col = np.ones((num_rows , 1)).astype('float32')
-
-        covars = np.concatenate((ones_col, covars), axis=1)
-
-        covars_pinv = np.linalg.pinv(covars)
-
-        fit = np.dot(covars,(np.dot(covars_pinv, pheno)))
-
-        pheno_resids = pheno - fit
+def get_pheno_residuals(fam_file, covar_file = None):
+    if has_header(fam_file):
+        pheno_df = pd.read_csv(fam_file, delimiter = " ")
     else:
-        pheno_mean = np.mean(pheno)
-        pheno_resids = pheno - pheno_mean
+        pheno_df = pd.read_csv(fam_file, delimiter = " ", header=None)
 
-    location = phenoFile.rsplit('/',1)[0]
+    pheno_data = pheno_df[5]
 
-    resids_file = location + "/pheno_resids"
-    np.savetxt(resids_file, pheno_resids, fmt='%.10f')
+    if (pheno_data.isnull().values.any()):
+        print('Error: Missing phenotypes detected')
+        sys.exit(2)
 
-    return resids_file
+    num_rows = pheno_data.shape[0]
+
+    covar_data = pd.DataFrame(index=range(num_rows))
+
+    if covar_file is not None:
+        if has_header(covar_file):
+            covar_df = pd.read_csv(covar_file, delimiter = " ")
+        else:
+            covar_df = pd.read_csv(covar_file, delimiter = " ", header=None)
+
+        if covar_df.shape[0] != num_rows:
+            print('Invalid .cov file')
+            sys.exit(2)
+
+        covar_data = covar_df.iloc[:,2:]
+
+        if (covar_data.isnull().values.any()):
+            print('Error: Missing covariates detected')
+            sys.exit(2)
+
+        covar_data.insert(loc=0, value=1, column='y_int')
+    else:
+        covar_data['y_int'] = 1
+
+    # Check if the data is categorical
+    is_categorical = np.in1d([0,1], pheno_data).all()
+
+    if is_categorical:
+        glm_res = sm.GLM(pheno_data, covar_data, family=sm.families.Binomial()).fit()
+        residuals = glm_res.resid_working
+    else:
+        # Check if the phenotype data is centred
+        if np.isclose(np.mean(pheno_data), 0, atol=1e-3) and covar_file is None:
+            residuals = pheno_data
+        else:
+            ols_res = sm.OLS(pheno_data, covar_data).fit()
+            residuals = ols_res.resid
+
+    max_val = np.max(np.abs(residuals))
+    min_val = np.min(np.abs(residuals))
+
+    # Get the phenotype scaling factor to pass to the host application
+    scaling_factor = np.round(100 / max_val, 2)
+
+    location = fam_file.rsplit('/', 1)[0]
+
+    resids_file = location + "/pheno_residuals"
+    np.savetxt(resids_file, residuals, fmt='%.10f')
+
+    return resids_file, scaling_factor
 
 if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-i', '--input_data', nargs=3)
-    parser.add_argument('-r', '--num_rows')
-    parser.add_argument('-p', '--perm_algo', nargs=2)
+    parser.add_argument('-i', '--input_data')
+    parser.add_argument('-p', '--perm_algo', nargs='+')
     parser.add_argument('-c', '--covar')
-    parser.add_argument('-x', '--xclbin')
-    parser.add_argument('-b', '--buf_size')
 
-    parser.add_argument('-a', '--host_app')
+    # parser.add_argument('-r', '--num_rows')
+    # parser.add_argument('-x', '--xclbin')
+    # parser.add_argument('-b', '--buf_size')
+    # parser.add_argument('-psf', '--phenotype_scale_factor')
+    # parser.add_argument('-a', '--host_app')
 
     args = parser.parse_args()
 
     host = './host'
-    geno_file = [s for s in args.input_data if '.bed' in s][0]
-    pheno_file = [s for s in args.input_data if '.fam' in s][0]
-    snp_file = [s for s in args.input_data if '.bim' in s][0]
+    xclbin = './mv_mul_4CU.hw.xilinx_aws_vu9p.awsxclbin'
 
-    input_files = [geno_file, pheno_file, snp_file]
+    input_pattern = args.input_data
 
-    if any(input_files) is None:
-        print('Missing input file')
+    bed_file = '{0}.bed'.format(input_pattern)
+    fam_file = '{0}.fam'.format(input_pattern)
+    bim_file = '{0}.bim'.format(input_pattern)
+
+    # bed_file = [s for s in args.input_data if '.bed' in s][0]
+    # fam_file = [s for s in args.input_data if '.fam' in s][0]
+    # bim_file = [s for s in args.input_data if '.bim' in s][0]
+
+    if not os.path.isfile(bed_file):
+        print('.bed file error')
+        sys.exit(2)
+
+    if not os.path.isfile(fam_file):
+        print('.fam file error')
+        sys.exit(2)
+
+    if not os.path.isfile(bim_file):
+        print('.bim file error')
         sys.exit(2)
 
     covar_file = args.covar
+    if covar_file is not None and not os.path.isfile(covar_file):
+        print('.cov file error')
+        sys.exit(2)
 
-    resids_file = get_pheno_residuals(pheno_file, covar_file)
+    # phenotype_scale_factor = args.phenotype_scale_factor
+    # if phenotype_scale_factor is None:
+    #     phenotype_scale_factor = '1'
 
-    proc = subprocess.run([host,
-                            '-xclbin', args.xclbin,
-                            #'-num_rows', args.num_rows,
-                            '-perm_algo', args.perm_algo[0], args.perm_algo[1],
-                            '-buf_size', args.buf_size,
-                            '-input_data', geno_file, resids_file, snp_file], stdout=sys.stdout)
+    resids_file, phenotype_scaling_factor = get_pheno_residuals(fam_file, covar_file)
 
     if args.perm_algo[0] == 'maxT':
-        host_location = host.rsplit('/',1)[0]
-
-        out_file = host_location + '/perm.best.txt'
-        with open(out_file) as f:
-            lines = f.read().splitlines()
-        
-        lines = [line.split() for line in lines]
-        results = np.array(lines)
-        results = (results[1:, -1:]).astype('float32')
-        perc_95 = np.percentile(results, 95)
-        perc_99 = np.percentile(results, 99)
-
-        plt.hist(results, bins=30)
-        plt.axvline(x=perc_95,color='k', linestyle='--')
-        plt.axvline(x=perc_99,color='k', linestyle='--')
-
-        # plt.show()
-        plt.savefig('hist.png', bbox_inches='tight')
-
-    # out_file = '/home/yaniv/Desktop/mv_mul_6_unconstrained_6CU_32KB_buf/Results/Adaptive/1000000 Perms/2MB_min_buf_41_56.txt'
-    # x = []
-    # y = []
-    # with open(out_file,"r") as f:
-    #     for ln in f:
-    #         if ln.startswith("Perm = "):
-    #             test = ln.split()
-    #             x.append(test[2])
-    #             y.append(test[6])
-    #             asd = 1
-
-    # x = np.asarray(x, dtype=np.int32)
-    # y = np.asarray(y, dtype=np.int32)
-    # plt.plot(x, y, 'b.')
-    # plt.show()
-
-
-
-
-
+        proc = subprocess.run([host,
+                               '-xclbin', xclbin,
+                               '-perm_algo', args.perm_algo[0], args.perm_algo[1],
+                               '-phenotype_scale_factor', phenotype_scaling_factor,
+                               '-input_data', bed_file, resids_file, bim_file],
+                              stdout=sys.stdout)
+    elif args.perm_algo[0] == 'adp':
+        proc = subprocess.run([host,
+                               '-xclbin', xclbin,
+                               '-perm_algo', args.perm_algo[0], args.perm_algo[1], args.perm_algo[2],
+                               '-phenotype_scale_factor', phenotype_scaling_factor,
+                               '-input_data', bed_file, resids_file, bim_file],
+                              stdout=sys.stdout)
+    else:
+        proc = subprocess.run([host,
+                               '-xclbin', xclbin,
+                               '-phenotype_scale_factor', phenotype_scaling_factor,
+                               '-input_data', bed_file, resids_file, bim_file],
+                              stdout=sys.stdout)

@@ -210,8 +210,16 @@ void perm_adp_update_results(
 
         if (perm == 0)
         {
-            double neg_sign = ( std::signbit(dot_prod) ) ? -1.0 : 1.0;
-            gwas_result[i] = neg_sign * F;
+            if (std::isnan(F))
+            {
+                gwas_result[i] = F;
+                perm_adp_results.is_snp_dropped[i] = 1;
+            }
+            else
+            {
+                double neg_sign = ( std::signbit(dot_prod) ) ? -1.0 : 1.0;
+                gwas_result[i] = neg_sign * F;
+            }
         }
         else
         {
