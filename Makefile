@@ -7,10 +7,10 @@
 help::
 	@echo "Makefile Usage:"
 	@echo "  make all TARGET=<sw_emu/hw_emu/hw>"
-	@echo "      Build xclbin for target (default sw_emu) and compile host app."
+	@echo "      Build xclbin for target FPGA (default hw) and compile host app."
 	@echo ""
 	@echo "  make xclbin TARGET=<sw_emu/hw_emu/hw>"
-	@echo "      Build xclbin for target (default sw_emu)."
+	@echo "      Build xclbin for target FPGA (default hw)."
 	@echo ""
 	@echo "  make clean"
 	@echo "      Remove files."
@@ -18,8 +18,8 @@ help::
 	@echo "  make app"
 	@echo "      Compile the host app."
 	@echo ""
-	@echo "  make run TARGET=<sw_emu/hw_emu/hw>"
-	@echo "      Builds xclbin/host if needed and runs the application."
+	@echo "  make app-debug"
+	@echo "      Compile the host app with debug prints."
 	@echo ""
 
 CURRENT_DIR = $(shell pwd)
@@ -38,9 +38,6 @@ VPP := v++
 
 BUILD_DIR := fpga_gwas_mv_mul/mv_mul.$(TARGET).xilinx_aws_vu9p_f1
 
-EMCONFIGUTIL := emconfigutil
-EMCONFIG_FILE := emconfig.json
-
 HOST_SRC = host_app/host.cpp
 
 HOST_EXE = host
@@ -55,7 +52,7 @@ KERNEL_XO_1 := $(BUILD_DIR)/mv_mul_1.$(TARGET).xilinx_aws_vu9p.xo
 KERNEL_XO_2 := $(BUILD_DIR)/mv_mul_2.$(TARGET).xilinx_aws_vu9p.xo
 KERNEL_XO_3 := $(BUILD_DIR)/mv_mul_3.$(TARGET).xilinx_aws_vu9p.xo
 
-XCLBIN := $(BUILD_DIR)/mv_mul.$(TARGET).xilinx_aws_vu9p.xclbin
+XCLBIN := mv_mul.$(TARGET).xilinx_aws_vu9p.xclbin
 
 # g++ compiler arguments
 CXXFLAGS = -I$(XILINX_XRT)/include -I$(XILINX_VIVADO)/include/
@@ -65,23 +62,26 @@ LDFLAGS = -lOpenCL -lpthread -lrt -lstdc++ -lgomp -L$(XILINX_XRT)/lib/
 # v++ compiler arguments
 VPP_COMPILE_OPTS := -t $(TARGET) -I'fpga_gwas_mv_mul/src/'
 
-# v++ Linker arguments
-VPP_LINK_OPTS := -t $(TARGET) --config fpga_gwas_mv_mul/link.cfg
-
 .PHONY: xclbin app all
 
 xclbin: $(XCLBIN)
+
 app: $(HOST_EXE)
+
+app-debug: CXXFLAGS += -DDEBUG
+app-debug: $(HOST_EXE)
 
 all: xclbin app
 
 clean:
-	-$(RM) $(EMCONFIG_FILE) $(HOST_EXE) $(XCLBIN) $(KERNEL_XO_0) $(KERNEL_XO_1) $(KERNEL_XO_2) $(KERNEL_XO_3)
+	rm -rf $(HOST_EXE) $(XCLBIN)* $(BUILD_DIR) v++_* x*.log
 
 XCLBIN_XO =
 ifeq ($(TARGET), hw)
+	VPP_LINK_OPTS := -t $(TARGET) --config fpga_gwas_mv_mul/link.cfg
 	XCLBIN_XO = $(KERNEL_XO_0) $(KERNEL_XO_1) $(KERNEL_XO_2) $(KERNEL_XO_3)
 else
+	VPP_LINK_OPTS := -t $(TARGET) --config fpga_gwas_mv_mul/link_emu.cfg
 	XCLBIN_XO = $(KERNEL_XO_0)
 endif
 
@@ -102,6 +102,3 @@ $(KERNEL_XO_3): $(KERNEL_SRC_3)
 
 $(HOST_EXE): $(HOST_SRC)
 	$(CXX) $(HOST_SRC) $(HOST_INC) $(LDFLAGS) $(CXXFLAGS) -o '$(HOST_EXE)' 
-
-$(EMCONFIG_FILE):
-	$(EMCONFIGUTIL) --platform $(DSA)

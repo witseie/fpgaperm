@@ -10,11 +10,11 @@ void readMeanToStream(
     const ap_int<DATA_WIDTH> *in_ptr,
     hls::stream<mean_wide_type_t> &out_stream)
 {
-    unsigned int num_blocks = num_rows >> 5;
-	if ( (num_rows % INPUT_MEAN_PAR_ENTRIES) > 0 )
-	{
-		num_blocks++;
-	}
+    unsigned int num_blocks = num_rows >> 5; // Bitshift hack to avoid the use of a DSP block. Equivalent to num_rows / 32
+    if ((num_rows % INPUT_MEAN_PAR_ELEMS) > 0)
+    {
+        num_blocks++;
+    }
 
 read_mean:
     for (unsigned int i = 0; i < num_blocks; ++i)
@@ -31,7 +31,7 @@ void readMatToStream(
     const ap_int<DATA_WIDTH> *in_ptr,
     hls::stream<matrix_wide_type_t> &out_stream)
 {
-    const unsigned int num_blocks = num_rows * num_cols / INPUT_MAT_PAR_ENTRIES;
+    const unsigned int num_blocks = num_rows * num_cols / INPUT_MAT_PAR_ELEMS;
 
 read_mat:
     for (unsigned int i = 0; i < num_blocks; ++i)
@@ -42,7 +42,7 @@ read_mat:
         matrix_wide_type_t mat_wt;
 #pragma HLS ARRAY_PARTITION variable = mat_wt complete dim = 1
 
-        for (unsigned int j = 0; j < INPUT_MAT_PAR_ENTRIES; ++j)
+        for (unsigned int j = 0; j < INPUT_MAT_PAR_ELEMS; ++j)
         {
             mat_wt[j] = in_wt.range(INPUT_MAT_DATATYPE_SIZE * (j + 1) - 1, INPUT_MAT_DATATYPE_SIZE * j);
         }
@@ -55,7 +55,7 @@ void readVecToBuffer(
     const ap_int<DATA_WIDTH> *in_ptr,
     ap_int<DATA_WIDTH> *buffer_ptr)
 {
-    const unsigned int num_blocks = num_cols / INPUT_VEC_PAR_ENTRIES;
+    const unsigned int num_blocks = num_cols / INPUT_VEC_PAR_ELEMS;
 
 read_vec:
     for (unsigned int i = 0; i < num_blocks; ++i)
@@ -70,11 +70,11 @@ void writeStreamToVec(
     hls::stream<output_wide_type_t> &in_stream,
     ap_int<DATA_WIDTH> *out_ptr)
 {
-    unsigned int num_blocks = num_rows >> 4;
-	if ( (num_rows % OUTPUT_PAR_ENTRIES) > 0 )
-	{
-		num_blocks++;
-	}
+    unsigned int num_blocks = num_rows >> 4; // Bitshift hack to avoid the use of a DSP block. Equivalent to num_rows / 16
+    if ((num_rows % OUTPUT_PAR_ELEMS) > 0)
+    {
+        num_blocks++;
+    }
 
 write_vec:
     for (unsigned int i = 0; i < num_blocks; ++i)

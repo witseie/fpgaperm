@@ -94,9 +94,9 @@ The host application will generate a text file (`gwas_results.txt`) with the fol
 ## Make
 A Makefile is provided to compile the host application (using GCC) and the FPGA design (using Xilinx Vitis/Vivado 2020.2).
 
-In order to compile the host application, the OpenCL, OpenMP and Xilinx XRT libraries must be installed
+In order to compile the host application, the OpenCL, OpenMP and Xilinx XRT libraries must be installed.
 
-The Makefile allows an FPGA design to be compiled for software emulation (sw_emu), hardware emulation (hw_emu) or hardware (hw). The FPGA design is specifically compiled for the Xilinx FPGA provided by the `f1.2xlarge` instance (the Xilinx VU9P).
+The Makefile allows an FPGA design to be compiled for software emulation (sw_emu), hardware emulation (hw_emu) or hardware (hw). The FPGA design is specifically compiled for the Xilinx FPGA provided by the `f1.2xlarge` instance (the VU9P).
 
 To compile the host application use
 

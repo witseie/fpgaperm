@@ -106,21 +106,12 @@ public:
         OCL_CHECK(err, program = cl::Program(context, {device}, bins, NULL, &err));
 
         // Create Out of Order command queue
-        OCL_CHECK(err, queue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE |
-                                            CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err));
-
+        OCL_CHECK(err, queue = cl::CommandQueue(context, device, CL_QUEUE_PROFILING_ENABLE | CL_QUEUE_OUT_OF_ORDER_EXEC_MODE_ENABLE, &err));
 
         delete[] krnl_bin;
 
-        std::cout << "FPGA Setup Complete" << std::endl << std::endl;
-    }
-
-    ~OclApi()
-    {
-        // clReleaseProgram(m_program);
-        // clReleaseKernel(m_kernel);
-        // clReleaseCommandQueue(m_queue);
-        // clReleaseContext(m_context);
+        std::cout << "FPGA Setup Complete" << std::endl
+                  << std::endl;
     }
 };
 

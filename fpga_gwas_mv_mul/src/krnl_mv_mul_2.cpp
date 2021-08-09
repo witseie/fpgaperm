@@ -33,7 +33,7 @@ extern "C"
         hls::stream<matrix_wide_type_t> matStream;
 #pragma HLS stream depth=2 variable=matStream
 
-        ap_int<DATA_WIDTH> vecBuffer[NUM_COLS / INPUT_VEC_PAR_ENTRIES];
+        ap_int<DATA_WIDTH> vecBuffer[NUM_COLS / INPUT_VEC_PAR_ELEMS];
 #pragma HLS ARRAY_PARTITION variable = vecBuffer cyclic factor = 8 dim = 1
 #pragma HLS STREAM off variable=vecBuffer depth=2
 

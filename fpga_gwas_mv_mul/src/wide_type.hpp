@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 
-/**
- * @file types.hpp
- * @brief common datatypes for L1 modules.
- *
- * This file is part of Vitis BLAS Library.
- */
-
 #ifndef XF_BLAS_TYPES_HPP
 #define XF_BLAS_TYPES_HPP
 
@@ -36,10 +29,8 @@
 
 namespace xf
 {
-
     namespace blas
     {
-
         template <typename T, unsigned int t_Width, unsigned int t_DataWidth = sizeof(T) * 8>
         class WideType
         {
@@ -80,7 +71,10 @@ namespace xf
                 return (m_Val[p_Idx]);
             }
 
-            T *getValAddr() { return (&m_Val[0]); }
+            T *getValAddr()
+            {
+                return (&m_Val[0]);
+            }
 
             WideType(){
 #pragma HLS INLINE
@@ -201,7 +195,11 @@ namespace xf
                 return (l_zero);
             }
 
-            static unsigned int per4k() { return (t_per4k); }
+            static unsigned int per4k()
+            {
+                return (t_per4k);
+            }
+
             void print(std::ostream &os)
             {
                 for (int i = 0; i < t_Width; ++i)
@@ -216,8 +214,7 @@ namespace xf
                 return (os);
             }
         };
+    }
+}
 
-    } // namespace blas
-
-} // namespace xf
 #endif
