@@ -8,7 +8,7 @@ Two different permutation testing algorithms are supported:
 
 The accelerator consists of three components:
 - The FPGA hardware component which accelerates the compute-heavy part of the algorithm
-- A C++ host application which has a numer of functions including:
+- A C++ host application which has a number of functions including:
     - Data preprocessing
     - Managing the FPGA execution
     - Running the permutation testing algorithms
