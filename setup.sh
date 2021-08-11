@@ -15,6 +15,3 @@ source $AWS_FPGA_REPO_DIR/vitis_runtime_setup.sh
 export PLATFORM_REPO_PATHS=$AWS_FPGA_REPO_DIR/Vitis/aws_platform/xilinx_aws-vu9p-f1_shell-v04261818_201920_2
 
 sudo systemctl start mpd
-
-sudo fpga-load-local-image -S 0 -I afi-068864cfd8c304e25 -H
-

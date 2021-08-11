@@ -76,19 +76,12 @@ def get_pheno_residuals(fam_file, covar_file = None):
 
     return resids_file, scaling_factor
 
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-i', '--input_data')
+    parser.add_argument('-i', '--input_data', required=True)
     parser.add_argument('-p', '--perm_algo', nargs='+')
-    parser.add_argument('-c', '--covar')
-
-    # parser.add_argument('-r', '--num_rows')
-    # parser.add_argument('-x', '--xclbin')
-    # parser.add_argument('-b', '--buf_size')
-    # parser.add_argument('-psf', '--phenotype_scale_factor')
-    # parser.add_argument('-a', '--host_app')
+    parser.add_argument('-c', '--covar', nargs='?')
 
     args = parser.parse_args()
 
@@ -100,10 +93,6 @@ if __name__ == "__main__":
     bed_file = '{0}.bed'.format(input_pattern)
     fam_file = '{0}.fam'.format(input_pattern)
     bim_file = '{0}.bim'.format(input_pattern)
-
-    # bed_file = [s for s in args.input_data if '.bed' in s][0]
-    # fam_file = [s for s in args.input_data if '.fam' in s][0]
-    # bim_file = [s for s in args.input_data if '.bim' in s][0]
 
     if not os.path.isfile(bed_file):
         print('.bed file error')
@@ -122,29 +111,41 @@ if __name__ == "__main__":
         print('.cov file error')
         sys.exit(2)
 
-    # phenotype_scale_factor = args.phenotype_scale_factor
-    # if phenotype_scale_factor is None:
-    #     phenotype_scale_factor = '1'
-
     resids_file, phenotype_scaling_factor = get_pheno_residuals(fam_file, covar_file)
 
-    if args.perm_algo[0] == 'maxT':
-        proc = subprocess.run([host,
-                               '-xclbin', xclbin,
-                               '-perm_algo', args.perm_algo[0], args.perm_algo[1],
-                               '-phenotype_scale_factor', phenotype_scaling_factor,
-                               '-input_data', bed_file, resids_file, bim_file],
-                              stdout=sys.stdout)
-    elif args.perm_algo[0] == 'adp':
-        proc = subprocess.run([host,
-                               '-xclbin', xclbin,
-                               '-perm_algo', args.perm_algo[0], args.perm_algo[1], args.perm_algo[2],
-                               '-phenotype_scale_factor', phenotype_scaling_factor,
-                               '-input_data', bed_file, resids_file, bim_file],
-                              stdout=sys.stdout)
+    if args.perm_algo:
+        if args.perm_algo[0] == 'maxT':
+            if not args.perm_algo[1].isdigit():
+                print('Error: ', args.perm_algo[1], ' is not a number. Usage: -p maxT [num_perms]')
+                sys.exit(2)
+
+            proc = subprocess.run([host,
+                                '-xclbin', xclbin,
+                                '-perm_algo', args.perm_algo[0], args.perm_algo[1],
+                                '-phenotype_scale_factor', str(phenotype_scaling_factor),
+                                '-input_data', bed_file, resids_file, bim_file],
+                                stdout=sys.stdout)
+        elif args.perm_algo[0] == 'adp':
+            if not args.perm_algo[1].isdigit():
+                print('Error: ', args.perm_algo[1], ' is not a number. Usage: -p adp [min_perms] [max_perms]')
+                sys.exit(2)
+
+            if not args.perm_algo[2].isdigit():
+                print('Error: ', args.perm_algo[2], ' is not a number. Usage: -p adp [min_perms] [max_perms]')
+                sys.exit(2)
+
+            proc = subprocess.run([host,
+                                '-xclbin', xclbin,
+                                '-perm_algo', args.perm_algo[0], args.perm_algo[1], args.perm_algo[2],
+                                '-phenotype_scale_factor', str(phenotype_scaling_factor),
+                                '-input_data', bed_file, resids_file, bim_file],
+                                stdout=sys.stdout)
     else:
         proc = subprocess.run([host,
                                '-xclbin', xclbin,
-                               '-phenotype_scale_factor', phenotype_scaling_factor,
+                               '-phenotype_scale_factor', str(phenotype_scaling_factor),
                                '-input_data', bed_file, resids_file, bim_file],
                               stdout=sys.stdout)
+
+if __name__ == '__main__':
+    main()

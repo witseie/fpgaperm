@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     std::string phenotype_file;
     std::string bim_file;
 
-    std::string binaryFile;
+    std::string fpga_bin_file;
 
     for (size_t i = 0; i < argc; i++)
     {
@@ -41,7 +41,7 @@ int main(int argc, char **argv)
         {
             std::cout << std::endl
                       << "FPGA binary: " << argv[i + 1] << std::endl;
-            binaryFile = argv[i + 1];
+            fpga_bin_file = argv[i + 1];
         }
 
         if (arg == "-phenotype_scale_factor")
@@ -77,10 +77,6 @@ int main(int argc, char **argv)
                 min_perms_adp = std::stoi(argv[i + 2]);
                 num_perms = std::stoi(argv[i + 3]);
 
-                std::cout << "Adaptive permutation: " << std::endl
-                          << "Min perms per SNP = " << min_perms_adp << std::endl
-                          << "Max perms per SNP = " << num_perms << std::endl;
-
                 block_size_arg = 8388608;
             }
             else if (algo_string.compare("maxT") == 0)
@@ -88,8 +84,6 @@ int main(int argc, char **argv)
                 perm_algo = perm_maxT;
 
                 num_perms = std::stoi(argv[i + 2]);
-
-                std::cout << "Performing " << num_perms << " maxT permutations" << std::endl;
 
                 block_size_arg = 33554432;
             }
@@ -104,7 +98,17 @@ int main(int argc, char **argv)
 
     if (perm_algo == perm_regression_only)
     {
-        std::cout << "Permutation testing option not selected, running GWAS analysis" << std::endl;
+        std::cout << std::endl << "Permutation testing option not selected, running GWAS analysis" << std::endl;
+    }
+    else if (perm_algo == perm_adaptive)
+    {
+        std::cout << std::endl << "Performing adaptive permutation: " << std::endl
+                  << "Min perms per SNP = " << min_perms_adp << std::endl
+                  << "Max perms per SNP = " << num_perms << std::endl;
+    }
+    else if (perm_algo == perm_maxT)
+    {
+        std::cout << std::endl << "Performing " << num_perms << " maxT permutations" << std::endl;
     }
 
     auto time = std::chrono::system_clock::now();
@@ -177,7 +181,6 @@ int main(int argc, char **argv)
 
     // Buffer setup based on the matrix block size and the number of kernels
     unsigned int num_kernels = 4;
-
 #ifdef DEBUG
     std::cout << "Using " << num_kernels << " kernels" << std::endl;
 #endif
@@ -237,11 +240,10 @@ int main(int argc, char **argv)
                                       phenotype_scale_factor,
                                       input_mean_buffer, input_matrix_buffer, input_pheno_buffer);
 
+    std::cout << "Data import complete" << std::endl << std::endl;
+
     input_mean_vector_t *input_mean_ptr = &input_mean_buffer;
     input_matrix_vector_t *input_matrix_ptr = &input_matrix_buffer;
-
-    std::cout << "Data import complete" << std::endl
-              << std::endl;
 
     auto end_import_time = std::chrono::high_resolution_clock::now();
 
@@ -275,7 +277,7 @@ int main(int argc, char **argv)
     std::srand(std::time(NULL));
 
     // Open CL setup
-    OclApi api(binaryFile);
+    OclApi api(fpga_bin_file);
     cl_int ocl_error_code;
 
     std::vector<ocl_task_buffers_t> kernel_buffers(num_kernels);
@@ -399,7 +401,7 @@ int main(int argc, char **argv)
                                           std::ref(gwas_result),
                                           std::ref(perm_adp_results));
 
-                if ((perm % perm_adp_drop_interval == 0))
+                if (perm % perm_adp_drop_interval == 0)
                 {
                     result_thread.join();
                 }
@@ -446,16 +448,16 @@ int main(int argc, char **argv)
                               << " Remaining SNPs = " << (num_snps - num_dropped_snps)
                               << " Num blocks = " << new_num_blocks << std::endl;
 #else
-                    std::cout << "Perm = " << perm
+                    std::cout << "\rPerm = " << perm
                               << " Dropped SNPs = " << num_dropped_snps
-                              << " Remaining SNPs = " << (num_snps - num_dropped_snps) << std::endl;
+                              << " Remaining SNPs = " << (num_snps - num_dropped_snps) << "    " << std::flush;
 #endif
 
                     // If the number of blocks is less than the number of kernels transition to
                     // one permutation per kernel
                     if (new_num_blocks <= num_kernels)
                     {
-                        perm_adp_one_perm_per_cu_start = perm;
+                        perm_adp_one_perm_per_cu_start = perm + 1;
                         perm_adp_drop_counter = 0;
 
                         last_block_snps = (num_snps - num_dropped_snps);
@@ -516,8 +518,10 @@ int main(int argc, char **argv)
         }
     }
 
+    // One permutation per kernel for long-running adaptive permutation
     if ((perm_algo == perm_adaptive) && (perm_adp_one_perm_per_cu_start > 0))
     {
+        // Store the indexes of the remaining SNPs to speed up buffer regeneration
         std::vector<size_t> perm_adp_significant_snp_indexes(last_block_snps, 0);
 
         int count = 0;
@@ -530,8 +534,10 @@ int main(int argc, char **argv)
         }
 
         size_t cu_inc_factor = 64; // May not be optimal
-        perm_adp_drop_interval *= 20;
         num_matrix_blocks = num_kernels * cu_inc_factor;
+
+        // Increase the SNP dropping interval
+        perm_adp_drop_interval *= 20;
 
         ocl_tasks.resize(num_matrix_blocks);
 
@@ -566,7 +572,7 @@ int main(int argc, char **argv)
 
 #ifdef DEBUG
         std::cout << "Starting long term permutation with " << last_block_snps << " SNPs" << std::endl;
-        std::cout << "Starting from the " << perm_adp_one_perm_per_cu_start + 1 << "th permutation" << std::endl;
+        std::cout << "Starting from the " << perm_adp_one_perm_per_cu_start << "th permutation" << std::endl;
         std::cout << "Matrix Size: \t\t" << perm_adp_block_size_bytes << " bytes" << std::endl;
         std::cout << "Input Mean Size: \t" << in_mean_elems_per_block * INPUT_MEAN_DATATYPE_SIZE_BYTES << " bytes" << std::endl;
         std::cout << "Output Vector Size: \t" << out_vec_elems_per_block * OUTPUT_DATATYPE_SIZE_BYTES << " bytes" << std::endl;
@@ -632,9 +638,19 @@ int main(int argc, char **argv)
                                      &ocl_error_code));
         }
 
-        for (size_t perm = perm_adp_one_perm_per_cu_start + 1; perm < num_perms; perm += num_matrix_blocks)
+        for (size_t perm = perm_adp_one_perm_per_cu_start; perm < (num_perms + 1); perm += num_matrix_blocks)
         {
-            for (unsigned int i = 0; i < num_matrix_blocks; i++)
+            size_t num_kernel_calls = num_matrix_blocks;
+
+            // If this is the last iteration, set the number of kernel calls to achieve num_perms
+            if ((num_perms - perm) < num_matrix_blocks)
+            {
+                num_kernel_calls = (num_perms - perm);
+            }
+
+            size_t current_perm = perm + num_kernel_calls;
+
+            for (unsigned int i = 0; i < num_kernel_calls; i++)
             {
                 std::random_shuffle(input_pheno_replicated[i].begin(), input_pheno_replicated[i].begin() + num_indiv);
 
@@ -667,26 +683,35 @@ int main(int argc, char **argv)
                                       std::ref(perm_adp_results),
                                       std::cref(perm_adp_significant_snp_indexes));
 
-            if (((perm % perm_adp_drop_interval) < num_matrix_blocks))
+            // If we want to drop SNPs join the thread
+            if ((current_perm % perm_adp_drop_interval) < num_matrix_blocks)
             {
                 result_thread.join();
             }
+            // If this is the last iteration join the thread
+            else if ((num_perms - perm) <= num_matrix_blocks)
+            {
+                result_thread.join();
+            }
+            // Otherwise detach the thread
             else
             {
                 result_thread.detach();
             }
 
-            if (((perm % perm_adp_drop_interval) < num_matrix_blocks))
+            // Drop SNPs
+            if ((current_perm % perm_adp_drop_interval) < num_matrix_blocks)
             {
                 auto prev_snps = last_block_snps;
 
-                size_t num_dropped_snps = perm_adp_drop_snps(perm,
+                size_t num_dropped_snps = perm_adp_drop_snps(current_perm,
                                                              num_snps,
                                                              perm_adp_min_perms_per_snp,
                                                              perm_adp_results);
 
                 last_block_snps = num_snps - num_dropped_snps;
 
+                // Update the buffer sizes if SNPs have been dropped. Limit the minimum buffer size to 10 SNPs.
                 size_t min_buf_size = bytes_per_snp * 10;
                 if (last_block_snps < prev_snps && perm_adp_block_size_bytes > min_buf_size)
                 {
@@ -748,12 +773,20 @@ int main(int argc, char **argv)
                                                         input_mean_replicated,
                                                         input_matrix_replicated);
 
-                std::cout << "Perm = " << perm
+#ifdef DEBUG
+                std::cout << "Perm = " << current_perm
                           << " Dropped SNPs = " << num_dropped_snps
                           << " Remaining SNPs = " << (num_snps - num_dropped_snps) << std::endl;
+#else
+                std::cout << "\rPerm = " << current_perm
+                          << " Dropped SNPs = " << num_dropped_snps
+                          << " Remaining SNPs = " << (num_snps - num_dropped_snps) << "    " << std::flush;
+#endif
 
+                // Double the SNP dropping interval every 10 drops
                 if (perm_adp_drop_counter == 10)
                 {
+                    // Cap the SNP dropping interval at 5 million permutations
                     perm_adp_drop_interval = (perm_adp_drop_interval >= 5000000) ? 5000000 : perm_adp_drop_interval *= 2;
                     perm_adp_drop_counter = 0;
 
@@ -761,7 +794,7 @@ int main(int argc, char **argv)
                     std::cout << "New drop interval = " << perm_adp_drop_interval << std::endl;
 #endif
 
-                    // Write intermediate results to file
+                    // Write intermediate results to file when performing many permutations
                     if (perm > 50000000)
                     {
                         std::ostringstream iss;
@@ -782,30 +815,32 @@ int main(int argc, char **argv)
                             std::getline(bim_file_stream, line);
 
                             if (i != perm_adp_significant_snp_indexes[idx])
+                            {
                                 continue;
+                            }
 
-                            size_t num_perms;
+                            size_t num_perms_temp;
                             double p_val;
                             if (perm_adp_results.perm_dropped[i] == 0)
                             {
-                                num_perms = perm;
+                                num_perms_temp = current_perm;
                             }
                             else
                             {
-                                num_perms = perm_adp_results.perm_dropped[i];
+                                num_perms_temp = perm_adp_results.perm_dropped[i];
                             }
 
-                            p_val = (double)(perm_adp_results.perm_count[i] + 1) / (num_perms + 1);
+                            p_val = (double)(perm_adp_results.perm_count[i] + 1) / (num_perms_temp + 1);
 
                             std::string buf;
-                            std::string snp_name;
+                            std::string snp_id;
                             std::stringstream stream(line);
                             stream >> buf;
-                            stream >> snp_name;
-                            res_file << std::left << std::setw(30) << snp_name.c_str()
+                            stream >> snp_id;
+                            res_file << std::left << std::setw(30) << snp_id.c_str()
                                      << std::left << std::setw(25) << gwas_result[i]
                                      << std::left << std::setw(25) << p_val
-                                     << std::left << std::setw(25) << num_perms << std::endl;
+                                     << std::left << std::setw(25) << num_perms_temp << std::endl;
 
                             idx++;
                         }
@@ -821,7 +856,7 @@ int main(int argc, char **argv)
                                                      perm_adp_min_perms_per_snp,
                                                      perm_adp_results);
 
-        std::cout << num_perms << " adaptive permutations complete." << std::endl
+        std::cout << std::endl << std::endl << num_perms << " adaptive permutations complete." << std::endl
                   << "Dropped SNPs = " << num_dropped_snps << std::endl
                   << "Remaining SNPs = " << (num_snps - num_dropped_snps) << std::endl;
     }
@@ -832,7 +867,7 @@ int main(int argc, char **argv)
 
     if (perm_algo == perm_adaptive)
     {
-        std::cout << "Writing adaptive permutation results to perm_adaptive.res.txt" << std::endl;
+        std::cout << std::endl << "Writing adaptive permutation results to perm_adaptive.res.txt" << std::endl;
 
         std::vector<double> perm_result(num_snps);
         std::vector<size_t> num_perms_vec(num_snps);
@@ -865,11 +900,11 @@ int main(int argc, char **argv)
             std::getline(bim_file_stream, line);
 
             std::string buf;
-            std::string snp_name;
+            std::string snp_id;
             std::stringstream stream(line);
             stream >> buf;
-            stream >> snp_name;
-            res_file << std::left << std::setw(30) << snp_name.c_str()
+            stream >> snp_id;
+            res_file << std::left << std::setw(30) << snp_id.c_str()
                      << std::left << std::setw(25) << gwas_result[i]
                      << std::left << std::setw(25) << perm_result[i]
                      << std::left << std::setw(25) << num_perms_vec[i] << std::endl;
@@ -891,7 +926,7 @@ int main(int argc, char **argv)
         //     best_file << std::left << std::setw(10) << i << "Max F = " << perm_maxF_res_vector[i] << std::endl;
         // }
 
-        std::cout << "Writing maxT permutation results to perm_maxT.res.txt" << std::endl;
+        std::cout << std::endl << "Writing maxT permutation results to perm_maxT.res.txt" << std::endl;
 
         std::ofstream res_file("perm_maxT.res.txt");
 
@@ -929,24 +964,24 @@ int main(int argc, char **argv)
             std::getline(bim_file_stream, line);
 
             std::string buf;
-            std::string snp_name;
+            std::string snp_id;
             std::stringstream stream(line);
             stream >> buf;
-            stream >> snp_name;
-            res_file << std::left << std::setw(30) << snp_name.c_str()
+            stream >> snp_id;
+            res_file << std::left << std::setw(30) << snp_id.c_str()
                      << std::left << std::setw(25) << gwas_result[i]
                      << std::left << std::setw(25) << perm_result[i] << std::endl;
 
             // if ( std::abs(gwas_result[i]) > percentile_95 )
             // {
-            //     significant_95 << std::left << std::setw(30) << snp_name.c_str()
+            //     significant_95 << std::left << std::setw(30) << snp_id.c_str()
             //         << std::left << std::setw(25) << gwas_result[i]
             //         << std::left << std::setw(25) << perm_result[i] << std::endl;
             // }
 
             // if ( std::abs(gwas_result[i]) > percentile_99 )
             // {
-            //     significant_99 << std::left << std::setw(30) << snp_name.c_str()
+            //     significant_99 << std::left << std::setw(30) << snp_id.c_str()
             //         << std::left << std::setw(25) << gwas_result[i]
             //         << std::left << std::setw(25) << perm_result[i] << std::endl;
             // }
@@ -965,10 +1000,10 @@ int main(int argc, char **argv)
             std::getline(bim_file_stream, line);
 
             std::string buf;
-            std::string snp_name;
+            std::string snp_id;
             std::stringstream stream(line);
             stream >> buf;
-            stream >> snp_name;
+            stream >> snp_id;
 
             unsigned int idx_start = (i / snps_per_block) * out_vec_elems_per_block;
             unsigned int output_idx = idx_start + (i % snps_per_block);
@@ -979,7 +1014,7 @@ int main(int argc, char **argv)
             double corr_sq = (dot_prod * dot_prod) / (denom * denom);
             double F = std::sqrt((corr_sq / (1 - corr_sq)) * (vector_stats.X[i].count - 2));
 
-            res_file << std::left << std::setw(20) << snp_name.c_str()
+            res_file << std::left << std::setw(20) << snp_id.c_str()
                      << std::left << std::setw(8) << vector_stats.X[i].count
                      // << std::left << std::setw(10) << vector_stats.X[i].sq_sum
                      // << std::left << std::setw(10) << vector_stats.X[i].std_dev
