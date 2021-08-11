@@ -8,7 +8,7 @@ Two different permutation testing algorithms are supported:
 
 The accelerator consists of three components:
 - The FPGA hardware component which accelerates the compute-heavy part of the algorithm
-- A C++ host application which has a numer of functions including:
+- A C++ host application which has a number of functions including:
     - Data preprocessing
     - Managing the FPGA execution
     - Running the permutation testing algorithms
@@ -39,14 +39,18 @@ Missing phenotypes are not supported.
 
 Multiple phenotypes are not supported i.e. only the first column of phenotypes in the .fam file is used
 
+The Python script reads the phenotype data from the 5th column of the .fam file.
+
 ### Covariate Data
-`-c [filename]` or `--covar [filename]` is an optional argument used to reference covariate data stored in `filename`
+`-c [filename]` or `--covar [filename]` is an optional argument used to reference covariate data stored in `filename`.
+
+In order to include covariates in the permutation procedure, the residuals of the phenotype data regressed on the covariate data (with an appended column of ones representing the y-intercept) are used instead of the phenotype data itself.
+
+The covariate data should be stored in space-separated columns with the first column representing the first covariate.
 
 The order of the covariates should correspond to the order of the phenotypes in the .fam file.
 
-All of the covariate data in `filename` is used.
-
-In order to include covariates in the permutation procedure, the residuals of the phenotype data regressed on the covariate data (with an appended column of ones representing the y-intercept) are used instead of the phenotype data itself.
+All of the covariate data in `filename` is used. 
 
 Missing covariates are not supported.
 
