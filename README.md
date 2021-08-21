@@ -21,12 +21,12 @@ The accelerator consists of three components:
 **NB: The host application does not filter the input data so all data in the supplied files is used for permutation testing**
 
 ## Instance Setup
-A Linux CentOS (username=`centos`) AMI is provided for convenience. The working directory of FPGA_perm is `/home/centos/FPGA_perm` and the setup script `/home/centos/FPGA_perm/setup.sh` should be run to initialise the FPGA_perm environment.
+A Linux CentOS AMI (`FPGA_perm` on EC2 region `us-east-1`, username=`centos`) is provided for convenience. The working directory of FPGA_perm is `/home/centos/FPGA_perm` and the setup script `/home/centos/FPGA_perm/setup.sh` should be run to initialise the FPGA_perm environment.
 
 ## Usage
 The `runPermTest.py` script should be used to run FPGA_perm on the selected dataset.
 
-The script expects the host application executable (`host`) and the FPGA binary (`mv_mul_4CU.hw.xilinx_aws_vu9p.awsxclbin`) to be in the FPGA_perm working directory.
+The script expects the host application executable (`host`) and the FPGA binary (`mv_mul.hw.xilinx_aws_vu9p.awsxclbin`) to be in the FPGA_perm working directory.
 
 The Python script uses `numpy`, `pandas` and `statsmodels`
 
@@ -96,11 +96,11 @@ The host application will generate a text file (`gwas_results.txt`) with the fol
 - Test statistic
 
 ## Make
-A Makefile is provided to compile the host application (using GCC) and the FPGA design (using Xilinx Vitis/Vivado 2020.2).
+A Makefile is included to compile the host application (using GCC) and the FPGA design (using Xilinx Vitis/Vivado 2020.2).
 
 In order to compile the host application, the OpenCL, OpenMP and Xilinx XRT libraries must be installed.
 
-The Makefile allows an FPGA design to be compiled for software emulation (sw_emu), hardware emulation (hw_emu) or hardware (hw). The FPGA design is specifically compiled for the Xilinx FPGA provided by the `f1.2xlarge` instance (the VU9P).
+The Makefile allows an FPGA design to be compiled for software emulation (sw_emu), hardware emulation (hw_emu) or hardware (hw). The FPGA design is specifically compiled for the Xilinx FPGA provided by the `f1.2xlarge` instance (the Xilinx Virtex UltraScale+ VU9P).
 
 To compile the host application use
 
