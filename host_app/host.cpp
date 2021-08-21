@@ -939,6 +939,7 @@ int main(int argc, char **argv)
         //     best_file << std::left << std::setw(10) << i << "Max F = " << perm_maxF_res_vector[i] << std::endl;
         // }
 
+        std::cout << std::endl << std::endl << num_perms << " maxT permutations complete." << std::endl;
         std::cout << std::endl << "Writing maxT permutation results to perm_maxT.res.txt" << std::endl;
 
         std::ofstream res_file("perm_maxT.res.txt");
