@@ -36,10 +36,10 @@ def get_pheno_residuals(fam_file, covar_file = None):
             covar_df = pd.read_csv(covar_file, delimiter = " ", header=None)
 
         if covar_df.shape[0] != num_rows:
-            print('Invalid .cov file')
+            print('Error: Invalid covariate file')
             sys.exit(2)
 
-        covar_data = covar_df.iloc[:,2:]
+        covar_data = covar_df
 
         if (covar_data.isnull().values.any()):
             print('Error: Missing covariates detected')
@@ -85,8 +85,16 @@ def main():
 
     args = parser.parse_args()
 
-    host = './host'
-    xclbin = './mv_mul_4CU.hw.xilinx_aws_vu9p.awsxclbin'
+    host = '/home/centos/FPGA_perm/host'
+    xclbin = '/home/centos/FPGA_perm/mv_mul.hw.xilinx_vu9p.awsxclbin'
+
+    if not os.path.isfile(host):
+        print('Error: Cannot find the host application executable ' + host)
+        sys.exit(2)
+
+    if not os.path.isfile(xclbin):
+        print('Error: Cannot find the FPGA config file ' + xclbin)
+        sys.exit(2)
 
     input_pattern = args.input_data
 
@@ -95,21 +103,30 @@ def main():
     bim_file = '{0}.bim'.format(input_pattern)
 
     if not os.path.isfile(bed_file):
-        print('.bed file error')
+        print('Error: invalid .bed file')
         sys.exit(2)
+    else:
+        print('Genotype file: ' + bed_file)
 
     if not os.path.isfile(fam_file):
-        print('.fam file error')
+        print('Error: invalid .fam file')
         sys.exit(2)
+    else:
+        print('Phenotype file: ' + fam_file)
 
     if not os.path.isfile(bim_file):
-        print('.bim file error')
+        print('Error: invalid .bim file')
         sys.exit(2)
+    else:
+        print('.bim file: ' + bim_file)
 
     covar_file = args.covar
-    if covar_file is not None and not os.path.isfile(covar_file):
-        print('.cov file error')
-        sys.exit(2)
+    if covar_file is not None:
+        if not os.path.isfile(covar_file):
+            print('Error: invalid covariate file')
+            sys.exit(2)
+        else:
+            print('Covariate file: ' + covar_file)
 
     resids_file, phenotype_scaling_factor = get_pheno_residuals(fam_file, covar_file)
 

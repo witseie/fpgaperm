@@ -39,15 +39,20 @@ int main(int argc, char **argv)
 
         if (arg == "-xclbin")
         {
-            std::cout << std::endl
-                      << "FPGA binary: " << argv[i + 1] << std::endl;
             fpga_bin_file = argv[i + 1];
+
+#ifdef DEBUG
+            std::cout << std::endl << "FPGA binary: " << fpga_bin_file << std::endl;
+#endif
         }
 
         if (arg == "-phenotype_scale_factor")
         {
             phenotype_scale_factor = std::stod(argv[i + 1]);
+
+#ifdef DEBUG
             std::cout << "Phenotype scaling factor: " << phenotype_scale_factor << std::endl;
+#endif
         }
 
         if (arg == "-input_data")
@@ -56,9 +61,9 @@ int main(int argc, char **argv)
             phenotype_file = argv[i + 2];
             bim_file = argv[i + 3];
 
-            std::cout << "Genotype file: " << genotype_file << std::endl;
-            std::cout << "Phenotype file: " << phenotype_file << std::endl;
-            std::cout << "BIM file: " << bim_file << std::endl;
+            // std::cout << "Genotype file: " << genotype_file << std::endl;
+            // std::cout << "Phenotype file: " << phenotype_file << std::endl;
+            // std::cout << "BIM file: " << bim_file << std::endl;
         }
 
         if (arg == "-num_rows")
@@ -125,7 +130,7 @@ int main(int argc, char **argv)
 
     auto start_import_time = std::chrono::high_resolution_clock::now();
 
-    std::cout << "Reading phenotype file " << phenotype_file << std::endl;
+    std::cout << "Reading phenotype residuals " << phenotype_file << std::endl;
     std::ifstream pheno_file_stream(phenotype_file);
     if (pheno_file_stream.is_open())
     {
@@ -175,9 +180,10 @@ int main(int argc, char **argv)
     {
         num_snps = num_snps_from_bed_file;
     }
-
-    std::cout << std::endl
-              << "Analysing " << num_snps << " SNPs" << std::endl;
+    else
+    {
+        std::cout << std::endl << "Analysing " << num_snps << " SNPs" << std::endl;
+    }
 
     // Buffer setup based on the matrix block size and the number of kernels
     unsigned int num_kernels = 4;
@@ -206,25 +212,32 @@ int main(int argc, char **argv)
     size_t out_vec_elems = num_matrix_blocks * out_vec_elems_per_block;
 
 #ifdef DEBUG
-    std::cout << "Bytes per SNP = " << bytes_per_snp << " bytes" << std::endl;
-    std::cout << "Matrix block size = " << matrix_block_size_bytes << " bytes" << std::endl;
+    std::cout << "Bytes per SNP = " << bytes_per_snp << std::endl;
+    std::cout << "Matrix block size (B) = " << matrix_block_size_bytes << std::endl;
     std::cout << "Num matrix blocks = " << num_matrix_blocks << std::endl;
     std::cout << "SNPs per block = " << snps_per_block << std::endl;
     std::cout << "Last block SNPs = " << last_block_snps << std::endl;
 
-    std::cout << "Matrix Size: \t\t" << input_matrix_size_bytes << " bytes" << std::endl;
-    std::cout << "Phenotype Vector Size: \t" << pheno_size_bytes << " bytes" << std::endl;
-    std::cout << "Input Mean Size: \t" << (num_matrix_blocks * in_mean_bytes_per_block) << " bytes" << std::endl;
-    std::cout << "Output Vector Size: \t" << (num_matrix_blocks * out_vec_bytes_per_block) << " bytes" << std::endl;
+    std::cout << "Matrix Size (B) = \t\t" << input_matrix_size_bytes << std::endl;
+    std::cout << "Phenotype Vector Size (B) = \t" << pheno_size_bytes << std::endl;
+    std::cout << "Input Mean Size (B) = \t" << (num_matrix_blocks * in_mean_bytes_per_block) << std::endl;
+    std::cout << "Output Vector Size (B) = \t" << (num_matrix_blocks * out_vec_bytes_per_block) << std::endl;
 
-    std::cout << "Input mean buffer size per block: \t" << in_mean_elems_per_block << "\t\t"
-              << in_mean_bytes_per_block << " bytes" << std::endl;
+    std::cout << "Input mean buffer size per block (B) = \t" << in_mean_bytes_per_block << std::endl;
+    std::cout << "Input vector buffer size per block (B) = \t" << pheno_size_bytes << std::endl;
+    std::cout << "Output vector buffer size per block (B) = \t" << out_vec_bytes_per_block << std::endl;
 
-    std::cout << "Input vector buffer size per block: \t" << pheno_num_elems << "\t\t"
-              << pheno_size_bytes << " bytes" << std::endl;
+    if (perm_algo == perm_maxT)
+    {
+        size_t block_size = matrix_block_size_bytes + in_mean_bytes_per_block + pheno_size_bytes + out_vec_bytes_per_block;
+        std::cout << "Data size per block (B) = " << block_size << std::endl;
 
-    std::cout << "Output vector buffer size per block: \t" << out_vec_elems_per_block << "\t\t"
-              << out_vec_bytes_per_block << " bytes" << std::endl;
+        size_t data_size = block_size * num_matrix_blocks;
+        std::cout << "Data size per perm (MB) = " << (data_size/1000000) << std::endl;
+
+        size_t total_size = data_size * (num_perms + 1);
+        std::cout << "Total data size (MB) = " << (total_size/1000000) << std::endl;
+    }
 #endif
 
     input_mean_vector_t input_mean_buffer(in_mean_elems, 0);
@@ -271,8 +284,6 @@ int main(int argc, char **argv)
         input_matrix_adp_buffer.resize(input_matrix_size_bytes, 0);
     }
 
-    auto start_processing_time = std::chrono::high_resolution_clock::now();
-
     // Seed RNG for std::random_shuffle
     std::srand(std::time(NULL));
 
@@ -290,6 +301,8 @@ int main(int argc, char **argv)
     OCL_CHECK(ocl_error_code, kernels[nkernel++] = cl::Kernel(api.program, "krnl_mvmul_1", &ocl_error_code));
     OCL_CHECK(ocl_error_code, kernels[nkernel++] = cl::Kernel(api.program, "krnl_mvmul_2", &ocl_error_code));
     OCL_CHECK(ocl_error_code, kernels[nkernel++] = cl::Kernel(api.program, "krnl_mvmul_3", &ocl_error_code));
+
+    auto start_processing_time = std::chrono::high_resolution_clock::now();
 
     for (size_t perm = 0; perm < (num_perms + 1); perm++)
     {
