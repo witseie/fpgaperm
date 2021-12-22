@@ -12,7 +12,7 @@ The accelerator consists of three components:
     - Data preprocessing
     - Managing the FPGA execution
     - Running the permutation testing algorithms
-- A Python script (`runPermTest.py`) which calculates phenotype residuals using the `statsmodels` package and runs the host application
+- A Python 3 script (`runPermTest.py`) which calculates phenotype residuals and runs the host application
 
 **NB: The accelerator only supports PLINK-formatted input files (.bed, .bim, .fam)**
 
@@ -20,15 +20,14 @@ The accelerator consists of three components:
 
 **NB: The host application does not filter the input data so all data in the supplied files is used for permutation testing**
 
-## Instance Setup
-A Linux CentOS AMI (`FPGA_perm` on EC2 region `us-east-1`, username=`centos`) is provided for convenience. The working directory of FPGA_perm is `/home/centos/FPGA_perm` and the setup script `/home/centos/FPGA_perm/setup.sh` should be run to initialise the FPGA_perm environment.
+## Instance Description
+A Linux CentOS AMI (`FPGA_perm` on EC2 region `us-east-1`, username=`centos`) is provided for convenience. The working directory of FPGA_perm is `/home/centos/FPGA_perm` and the script `/home/centos/FPGA_perm/setup.sh` should be run to initialise the FPGA_perm environment.
 
 ## Usage
-The `runPermTest.py` script should be used to run FPGA_perm on the selected dataset.
-
-The script expects the host application executable (`host`) and the FPGA binary (`mv_mul.hw.xilinx_aws_vu9p.awsxclbin`) to be in the FPGA_perm working directory.
-
-The Python script uses `numpy`, `pandas` and `statsmodels`
+Once the FPGA_perm environment has been initialised, the `runPermTest.py` script in the FPGA_perm working directory can be used to run FPGA_perm on the selected dataset e.g.
+```
+python3 ./runPermTest.py -i [input_data] -p maxT [num_perms]
+```
 
 ### Input Data
 `-i [input_pattern]` or `--input_data [input_pattern]` is used to reference the input files i.e. `input_pattern`.bed, `input_pattern`.bim, `input_pattern`.fam
@@ -94,6 +93,11 @@ The host application will generate a text file (`gwas_results.txt`) with the fol
 - Number of non-missing genotypes
 - Linear regression coefficient (beta)
 - Test statistic
+
+## Requirements
+The `runPermTest.py` script expects the host application executable (`host`) and the FPGA binary (`mv_mul.hw.xilinx_aws_vu9p.awsxclbin`) to be in the FPGA_perm working directory.
+
+The `runPermTest.py` script uses `numpy`, `pandas` and `statsmodels`.
 
 ## Make
 A Makefile is included to compile the host application (using GCC) and the FPGA design (using Xilinx Vitis/Vivado 2020.2).
