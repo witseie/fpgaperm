@@ -1,6 +1,7 @@
 export PATH=$PATH:/usr/local/sbin
 export PATH=$PATH:/usr/sbin
 export FPGA_PERM_PATH=/home/centos/FPGA_perm
+export LC_ALL="C"
 
 git clone https://github.com/aws/aws-fpga.git $AWS_FPGA_REPO_DIR
 
