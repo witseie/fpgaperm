@@ -21,10 +21,10 @@ The accelerator consists of three components:
 **NB: The host application does not filter the input data so all data in the supplied files is used for permutation testing**
 
 ## Instance Description
-A Linux CentOS AMI (`FPGA_perm` on EC2 region `us-east-1`, username=`centos`) is provided for convenience. The working directory of FPGA_perm is `/home/centos/FPGA_perm` and the script `/home/centos/FPGA_perm/setup.sh` should be run to initialise the FPGA_perm environment.
+The accelerator is designed to run on AWS F1 FPGA instances launched with the [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-gimv3gqbpe57k?sr=0-1&ref_=beagle&applicationId=AWSMPContessa). To initialise the FPGA_perm environment, source the setup script `setup.sh`.
 
 ## Usage
-Once the FPGA_perm environment has been initialised, the `runPermTest.py` script in the FPGA_perm working directory can be used to run FPGA_perm on the selected dataset e.g.
+Once the FPGA_perm environment has been initialised, the `runPermTest.py` Python3 script can be used to run FPGA_perm on the selected dataset e.g.
 ```
 python3 ./runPermTest.py -i [input_data] -p maxT [num_perms]
 ```
