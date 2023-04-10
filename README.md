@@ -21,7 +21,7 @@ The accelerator consists of three components:
 **NB: The host application does not filter the input data so all data in the supplied files is used for permutation testing**
 
 ## Instance Description
-The accelerator is designed to run on AWS F1 FPGA instances launched with the [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-gimv3gqbpe57k?sr=0-1&ref_=beagle&applicationId=AWSMPContessa). To initialise the FPGA_perm environment, source the setup script `setup.sh`.
+The accelerator is designed to run on AWS F1 FPGA instances launched with the [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-iehshpgi7hcjg?sr=0-2&ref_=beagle&applicationId=AWSMPContessa). To initialise the FPGA_perm environment, source the setup script `setup.sh`.
 
 ## Usage
 Once the FPGA_perm environment has been initialised, the `runPermTest.py` Python3 script can be used to run FPGA_perm on the selected dataset e.g.
