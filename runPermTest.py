@@ -85,8 +85,8 @@ def main():
 
     args = parser.parse_args()
 
-    host = '/home/centos/FPGA_perm/host'
-    xclbin = '/home/centos/FPGA_perm/mv_mul.hw.xilinx_vu9p.awsxclbin'
+    host = os.path.dirname(os.path.realpath(__file__)) + '/host'
+    xclbin = os.path.dirname(os.path.realpath(__file__)) + '/mv_mul.hw.xilinx_vu9p.awsxclbin'
 
     if not os.path.isfile(host):
         print('Error: Cannot find the host application executable ' + host)
