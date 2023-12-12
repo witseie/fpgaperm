@@ -20,15 +20,12 @@ The accelerator consists of three components:
 
 **NB: The host application does not filter the input data so all data in the supplied files is used for permutation testing**
 
-## Installation
-
-
-The accelerator is designed to run on AWS F1 FPGA instances launched with the [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-iehshpgi7hcjg?sr=0-2&ref_=beagle&applicationId=AWSMPContessa). Version 1.0.5 of this AMI does not require subscription (e.g., ami-056e4346b21bf5cb1 in us-east-1, ami-0d5a2e5dd1e802d8e in af-south-1, ami-0bda4348cc5912e6f in eu-west-1). The code should run on later versions of the AMI but this has not been fully.
+## Usage
+The accelerator is designed to run on AWS F1 FPGA instances launched with the [FPGA Developer AMI](https://aws.amazon.com/marketplace/pp/prodview-iehshpgi7hcjg?sr=0-2&ref_=beagle&applicationId=AWSMPContessa). Version 1.0.5 of this AMI does not require subscription (e.g., ami-056e4346b21bf5cb1 in us-east-1, ami-0d5a2e5dd1e802d8e in af-south-1, ami-0bda4348cc5912e6f in eu-west-1). The code should run on later versions of the AMI but this has not been fully tested.
 
 - Launch an instance of the appropriate AMI
 - To initialise the FPGA_perm environment, source the setup script `setup.sh`.
 
-## Usage
 Once the FPGA_perm environment has been initialised, the `runPermTest.py` Python3 script can be used to run FPGA_perm on the selected dataset e.g.
 ```
 python3 ./runPermTest.py -i [input_data] -p maxT [num_perms]
@@ -118,3 +115,34 @@ To compile the host application use
 To compile the FPGA design use
 
     make xclbin
+
+### OpenCL installation
+For Ubuntu install the following packages:
+```
+sudo apt-get install ocl-icd-libopencl1
+sudo apt-get install opencl-headers
+sudo apt-get install ocl-icd-opencl-dev
+```
+
+For RHEL/CentOS use EPEL to install the following packages:
+```
+sudo yum install ocl-icd
+sudo yum install ocl-icd-devel
+sudo yum install opencl-headers
+```
+
+### OpenMP Installation
+On Ubuntu:
+```
+sudo apt-get install libomp-dev
+```
+
+On RHEL/CentOS:
+```
+sudo yum install openmpi-devel
+```
+
+### Xilinx Runtime Installation
+The following links provide download links/instructions to install XRT:
+* https://www.xilinx.com/products/design-tools/vitis/xrt.html#overview
+* https://github.com/aws/aws-fpga/blob/master/Vitis/docs/XRT_installation_instructions.md
